@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-09-23
+
+### Fixed
+- `order_to_intent` side mapping: `buy`/`sell` (and `flat`/`close`, single
+  letters, any case) now map to `LONG`/`SHORT`/`EXIT` instead of every
+  non-`LONG`/`SHORT` side silently becoming `EXIT`.  Previously a `buy` order
+  was treated as an exit, and exits are never blocked by risk limits, so risk
+  review approved everything.  Unknown sides now default to `LONG` so they
+  are risk-checked as new positions.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added

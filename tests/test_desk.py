@@ -200,3 +200,40 @@ def test_adapters_idea_to_intent_and_state():
     assert state.equity == 50_000.0 and state.positions["AAA"].quantity == 10
     flat = coerce_state(None, equity=10_000.0)
     assert flat.cash == 10_000.0
+
+
+def test_order_to_intent_side_aliases():
+    """Regression: buy/sell must map to LONG/SHORT, never to EXIT.
+
+    Before the fix, any side other than LONG/SHORT fell through to EXIT,
+    and exits are never blocked by risk limits, so risk review approved
+    everything.
+    """
+    pytest.importorskip("trade_risk")
+    from trade_agents.adapters import order_to_intent
+    from trade_risk.base import EXIT, LONG, SHORT
+
+    cases = {
+        "buy": LONG, "BUY": LONG, "long": LONG, "LONG": LONG, "b": LONG,
+        "sell": SHORT, "SELL": SHORT, "short": SHORT, "SHORT": SHORT,
+        "exit": EXIT, "flat": EXIT, "close": EXIT,
+        "mystery": LONG,  # unknown sides are risk-checked as entries
+    }
+    for side, expected in cases.items():
+        intent = order_to_intent({"symbol": "AAA", "side": side,
+                                  "quantity": 1, "price": 10.0})
+        assert intent.side is expected, side
+
+
+def test_risk_review_blocks_buy_when_limit_hit():
+    """End-to-end: a tight limit must veto a 'buy' order."""
+    pytest.importorskip("trade_risk")
+    from trade_agents.risk_agent import RiskManagerAgent
+
+    agent = RiskManagerAgent(
+        limits=[("max_position_notional", {"max_pct": 0.01})])
+    approved, vetoes = agent.review(
+        [{"symbol": "SPY", "side": "buy", "quantity": 10, "price": 580.0}],
+        equity=100_000.0,
+    )
+    assert not approved and len(vetoes) == 1

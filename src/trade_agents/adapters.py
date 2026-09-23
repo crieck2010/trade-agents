@@ -132,18 +132,32 @@ def apply_fill_to_state(state, order):
     return replace(state, positions=positions, cash=cash, equity=equity, peak_equity=peak)
 
 
+_SIDE_ALIASES = {
+    "LONG": "LONG", "BUY": "LONG", "B": "LONG",
+    "SHORT": "SHORT", "SELL": "SHORT", "S": "SHORT",
+    "EXIT": "EXIT", "FLAT": "EXIT", "CLOSE": "EXIT",
+}
+
+
 def order_to_intent(order: dict):
-    """``{symbol, side, quantity, price}`` -> ``trade_risk.OrderIntent``."""
+    """``{symbol, side, quantity, price}`` -> ``trade_risk.OrderIntent``.
+
+    ``side`` accepts the desk vocabulary (``LONG``/``SHORT``/``EXIT``) and
+    the natural broker vocabulary (``buy``/``sell``/``flat``/``close``),
+    case-insensitive.  Unknown sides default to ``LONG`` (a new position)
+    so they are risk-checked instead of waved through as exits.
+    """
     try:
         from trade_risk import OrderIntent
         from trade_risk.base import EXIT, LONG, SHORT
     except ImportError as exc:  # pragma: no cover
         raise ImportError("the risk agent needs the trade-risk package installed") from exc
 
-    side = {"LONG": LONG, "SHORT": SHORT}.get(str(order.get("side", "LONG")).upper(), EXIT)
+    sides = {"LONG": LONG, "SHORT": SHORT, "EXIT": EXIT}
+    key = _SIDE_ALIASES.get(str(order.get("side", "LONG")).strip().upper(), "LONG")
     return OrderIntent(
         symbol=order["symbol"],
-        side=side,
+        side=sides[key],
         quantity=order.get("quantity"),
         price=order.get("price"),
     )
