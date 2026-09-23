@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trade-agents"
+version = "0.1.0"
+description = "Hedge-fund research desk: niche monitoring/backtesting agents, portfolio manager, risk manager with veto"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "crieck2010" }]
+requires-python = ">=3.10"
+keywords = ["trading", "agents", "research", "backtesting", "portfolio"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial",
+]
+
+[project.urls]
+Homepage = "https://github.com/crieck2010/trade-agents"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
