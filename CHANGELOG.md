@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-09-23
+
+### Added
+- `sentiment_scout`: seventh researcher agent. Wraps the `trade-sentiment`
+  engine (lazy import) and turns social/news sentiment pops into
+  directional `TradeIdea`s — bullish pops become `long` ideas, bearish
+  pops `short` ideas, gated by a configurable `min_conviction`
+  (default 5.0/10) with sentiment stats (`bullishness_10`,
+  `conviction_10`, `n_mentions`, `volume_zscore`, `tone_shift`,
+  `drivers`) as the idea evidence. Missing sibling or scan failure
+  degrades to an empty brief with a note; never raises.
+- Professional documentation set under `docs/`: `ARCHITECTURE.md`
+  (desk pipeline, agent roles, failure semantics, scaling),
+  `RESEARCHERS.md` (all seven researchers: niches, universes, bars),
+  `INTEROP.md` (sibling integrations incl. `trade-sentiment`, plus the
+  how-to for adding a researcher). README links the set.
+
 ## [0.1.1] - 2026-09-23
 
 ### Fixed

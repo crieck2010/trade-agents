@@ -36,7 +36,7 @@ report = desk.run(provider, equity=100_000.0, parallel=True)
 
 print(report.summary())
 # Desk report (2026-09-23 16:03 UTC)
-# 6 briefs, 4 ideas, 4 allocations, 1 approved, 3 vetoed
+# 7 briefs, 4 ideas, 4 allocations, 1 approved, 3 vetoed
 #   LONG  SPY   w=26.7% q=260.5 (donchian_breakout, score=0.43)
 #   ...
 #   VETO SPY [max_position_notional]: SPY notional would exceed 25% of equity
@@ -52,10 +52,11 @@ print(report.summary())
 | `futures_trend_analyst` | Futures × trend (index, metals, energy) |
 | `volatility_breakout_analyst` | Index ETFs / megacaps × volatility expansion (options-desk-adjacent) |
 | `cross_asset_regime_monitor` | Cross-asset regime labels (trending / ranging / volatile) |
+| `sentiment_scout` | Social/news sentiment pops → directional ideas (trade-sentiment) |
 | `portfolio_manager` | Ranks ideas, inverse-vol allocation, regime tilt, order sizing |
 | `risk_manager` | Pre-trade veto via `trade-risk` limits (cumulative fills) |
 
-Each researcher backtests its (universe × strategies × params) grid
+Each backtesting researcher backtests its (universe × strategies × params) grid
 through the sibling engines, scores every candidate
 (`sharpe × evidence_factor − 1.5 × max_drawdown`), and keeps ideas above
 its research bar. One bad parameter combo never kills a sweep.
@@ -94,10 +95,19 @@ influences, never overrides, the quantitative rank.
   `RiskManager` from plain `[(name, params)]` config.
 - `order_to_intent` / `coerce_state` / `apply_fill_to_state` — translate
   between desk orders and `trade-risk` objects.
+- `sentiment_scout` consumes `trade-sentiment` (lazy, inside
+  `research()`); without it the scout returns an empty brief and the
+  rest of the desk is unaffected.
 
 Market data comes through the `BarsProvider` protocol (`get_bars(symbol)
 -> list`); `DictBarsProvider` covers tests and synthetic research. Plug
 in the `trade-data-*` engines by implementing the two-method protocol.
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` — desk pipeline, agent roles, failure semantics
+- `docs/RESEARCHERS.md` — all seven researchers: niches, universes, bars
+- `docs/INTEROP.md` — sibling integrations and how to add a researcher
 
 ## Scaling notes
 
@@ -120,4 +130,4 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.1.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.1.2**.

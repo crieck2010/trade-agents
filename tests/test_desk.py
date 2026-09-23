@@ -173,7 +173,7 @@ def test_registry():
 
 def test_default_desk_shape():
     desk = default_desk()
-    assert len(desk.researchers) == 6
+    assert len(desk.researchers) == 7
     assert desk.pm.name == "portfolio_manager"
     assert desk.risk.name == "risk_manager"
 

@@ -107,7 +107,7 @@ class Desk:
 def default_desk(
     advisor: Callable[[str], str] | None = None, **pm_kwargs
 ) -> Desk:
-    """The standard desk: all six scouts + PM + risk manager."""
+    """The standard desk: all seven scouts + PM + risk manager."""
     return Desk(
         researchers=[cls() for cls in SCOUT_CLASSES],
         portfolio_manager=PortfolioManagerAgent(**pm_kwargs),

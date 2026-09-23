@@ -31,7 +31,7 @@ from .base import (
 )
 from .desk import Desk, default_desk
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __all__ = [
     "Agent",
     "Allocation",

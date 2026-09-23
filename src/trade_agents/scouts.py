@@ -1,16 +1,18 @@
 """Idea-generator agents: one niche per researcher.
 
-Each scout pairs an instrument universe with a strategy family and a
-small parameter grid, backtests every combination, and keeps the ideas
-that clear its research bar.  Niche specialization is what makes the
-desk useful: the PM sees *why* each idea exists, not just a number.
+Most scouts pair an instrument universe with a strategy family and a
+small parameter grid, backtest every combination, and keep the ideas
+that clear the research bar.  The sentiment scout is the exception: it
+wraps the trade-sentiment engine and turns chatter pops into ideas
+without backtesting.  Niche specialization is what makes the desk
+useful: the PM sees *why* each idea exists, not just a number.
 """
 
 from __future__ import annotations
 
 from datetime import timezone
 
-from .base import Agent, BarsProvider, Brief
+from .base import Agent, BarsProvider, Brief, TradeIdea
 from .research import (
     backtest_candidate,
     conviction_from_score,
@@ -185,6 +187,99 @@ class CrossAssetRegimeMonitor(Agent):
         )
 
 
+SENTIMENT_INSTALL_HINT = (
+    "trade-sentiment is not installed; "
+    "pip install git+https://github.com/crieck2010/trade-sentiment.git"
+)
+
+
+class SentimentScout(Agent):
+    """Social/news sentiment pops → directional trade ideas.
+
+    Unlike the backtesting scouts, this researcher does not run a
+    parameter grid.  It wraps the ``trade-sentiment`` engine (lazy import,
+    so the desk works without the sibling): each pop's tone sets the
+    direction (bullish → long, bearish → short) and its conviction sets
+    the idea score.  Evidence lives in ``idea.metrics`` as sentiment
+    stats (bullishness_10, conviction_10, n_mentions, volume_zscore,
+    tone_shift, drivers) rather than backtest metrics — the PM and risk
+    agents treat it accordingly.
+    """
+
+    name = "sentiment_scout"
+    niche = "equities + crypto × social/news sentiment pops"
+    description = (
+        "Turns sentiment pops (Reddit/StockTwits/news chatter bursts) "
+        "into directional ideas."
+    )
+    universe: tuple[str, ...] = (
+        "SPY", "AAPL", "MSFT", "NVDA", "TSLA", "BTC-USD", "ETH-USD",
+    )
+    strategy_name = "sentiment_momentum"
+    window_hours: int = 24
+    min_conviction: float = 5.0  # 0–10 conviction bar
+    top_n: int = 5
+
+    def research(
+        self,
+        provider: BarsProvider | None = None,
+        strategy_factory=None,
+        backtest_fn=None,
+    ) -> Brief:
+        try:
+            from trade_sentiment import scan as sentiment_scan
+            from trade_sentiment.adapters import to_agent_ideas
+        except ImportError:
+            return Brief(
+                agent=self.name, niche=self.niche, ideas=(),
+                notes={"error": SENTIMENT_INSTALL_HINT,
+                       "universe": list(self.universe)},
+            )
+        try:
+            pops = sentiment_scan(
+                list(self.universe),
+                window_hours=self.window_hours,
+                min_mentions=5,
+            )
+        except Exception as exc:  # network down, source changed, …
+            return Brief(
+                agent=self.name, niche=self.niche, ideas=(),
+                notes={"error": f"sentiment scan failed: {exc}",
+                       "universe": list(self.universe)},
+            )
+
+        ideas: list[TradeIdea] = []
+        for d in to_agent_ideas(pops):
+            if d["conviction_10"] < self.min_conviction:
+                continue
+            ideas.append(TradeIdea(
+                agent=self.name,
+                symbol=d["symbol"],
+                strategy=self.strategy_name,
+                params=dict(d["params"]),
+                direction=d["direction"].lower(),  # "long" | "short"
+                metrics={
+                    "bullishness_10": d["bullishness_10"],
+                    "conviction_10": d["conviction_10"],
+                    "n_mentions": d["n_mentions"],
+                    "volume_zscore": d["volume_zscore"],
+                    "tone_shift": d["tone_shift"],
+                    "drivers": d["drivers"],
+                },
+                score=d["score"],
+                conviction=d["conviction_10"] / 10.0,
+                thesis=d["thesis"],
+            ))
+        ideas.sort(key=lambda i: i.score, reverse=True)
+        return Brief(
+            agent=self.name,
+            niche=self.niche,
+            ideas=tuple(ideas[: self.top_n]),
+            notes={"scanned": len(self.universe), "pops": len(pops),
+                   "universe": list(self.universe)},
+        )
+
+
 SCOUT_CLASSES = (
     EquityTrendScout,
     EquityMeanReversionScout,
@@ -192,4 +287,5 @@ SCOUT_CLASSES = (
     FuturesTrendAnalyst,
     VolatilityBreakoutAnalyst,
     CrossAssetRegimeMonitor,
+    SentimentScout,
 )
