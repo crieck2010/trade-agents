@@ -131,3 +131,47 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Current version: **0.1.2**.
+
+## The maths
+
+**What you learn.** Which strategy niches (trend, mean-reversion, momentum,
+volatility breakout, sentiment pops) actually backtest well on your bars —
+and how a portfolio manager turns a pile of uncorrelated ideas into sized
+orders that survive a risk manager's veto.
+
+**Why it matters.** A research desk is a portfolio-construction machine.
+The maths here is deliberately simple and inspectable: score ideas with a
+penalized risk-adjusted metric, weight them inversely to their volatility,
+tilt toward the current regime, and let hard limits veto anything
+oversized. Every step is a closed-form formula, not a black box.
+
+**The maths.**
+
+- *Idea score* (`research.score_result`): `sharpe × trade_factor − 1.5 × max_drawdown`,
+  where `trade_factor = min(1, n_trades / 10)` ramps 0→1 over the first ten
+  trades — thin evidence is distrusted by construction, and drawdown is
+  penalized linearly at 1.5×.
+- *Conviction* (`conviction_from_score`): a sigmoid `1 / (1 + e^(−2·(score − 0.5)))`
+  squashing the raw score into 0–1.
+- *Allocation* (`PortfolioManagerAgent.allocate`): inverse-volatility weights
+  `w_i ∝ 1 / vol_i` when volatilities are known (falling back to
+  score-weighting when they aren't), multiplied by a per-symbol regime tilt
+  (e.g. 1.2× when the regime favors the idea's family), capped at
+  `max_weight`, then renormalized to sum to 1.
+- *Risk veto* (`risk_agent`): orders are checked against `trade-risk` limits
+  with cumulative fill tracking — a vetoed order never executes, and the
+  first veto wins.
+- *LLM seam*: `Brief.to_prompt()` renders scores/Sharpe/drawdown for an
+  advisor; a `RANK: 2,0,1` line is honored on a best-effort basis — the
+  advisor influences, never overrides, the quantitative rank.
+
+**Honest limitations.**
+
+- The 1.5× drawdown penalty and the 10-trade evidence ramp are fixed
+  heuristics, not estimated — they encode caution, not calibration.
+- Inverse-volatility weighting ignores correlations; two 30%-correlated
+  ideas get full weight each (see trade-optimize for correlation-aware sizing).
+- The risk agent's cumulative fill tracking assumes fills at order prices —
+  reconcile against real executions before live use.
+- Parallel sweeps share nothing, so researchers can't learn from each
+  other's grids within one run.
