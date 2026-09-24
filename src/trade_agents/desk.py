@@ -1,8 +1,18 @@
-"""The desk: researchers -> portfolio manager -> risk manager.
+"""The desk: researchers -> debate -> overfit gate -> PM -> risk manager.
 
 ``Desk.run`` executes one research cycle and returns a
 :class:`DeskReport`.  Researchers are independent, so ``parallel=True``
 runs their sweeps in a thread pool (stdlib ``concurrent.futures``).
+
+Optional stages (all off by default, all fail-soft):
+
+- ``debate_rounds``: run the bull/bear debate protocol on every idea
+  before the PM sees it (rules mode; deterministic).
+- ``overfit_gate``: ideas must PASS the trade-overfit desk to reach the
+  PM.  Needs ``idea_returns(idea_dict) -> returns``; ideas without a
+  returns series are killed (missing data never passes).
+- ``ledger_path``: record proposals, desk verdicts, and risk forecasts
+  into a track-record JSONL ledger for the incentive system.
 """
 
 from __future__ import annotations
@@ -23,6 +33,10 @@ class Desk:
         portfolio_manager: PortfolioManagerAgent | None = None,
         risk_agent: RiskManagerAgent | None = None,
         advisor: Callable[[str], str] | None = None,
+        debate_rounds: int = 0,
+        overfit_gate: bool = False,
+        idea_returns: Callable[[dict], list[float] | None] | None = None,
+        ledger_path: str | None = None,
     ) -> None:
         self.researchers = (
             researchers if researchers is not None
@@ -31,6 +45,10 @@ class Desk:
         self.pm = portfolio_manager or PortfolioManagerAgent()
         self.risk = risk_agent or RiskManagerAgent()
         self.advisor = advisor
+        self.debate_rounds = debate_rounds
+        self.overfit_gate = overfit_gate
+        self.idea_returns = idea_returns
+        self.ledger_path = ledger_path
 
     def run(
         self,
@@ -45,6 +63,9 @@ class Desk:
         backtest_fn = make_backtest_fn()
 
         briefs = self._run_research(provider, strategy_factory, backtest_fn, parallel)
+        briefs = self._run_debate(briefs)
+        briefs = self._run_overfit_gate(briefs)
+        self._record_ledger(briefs)
 
         ideas = self.pm.rank(briefs)
         advisor_notes = ""
@@ -68,6 +89,7 @@ class Desk:
         }
         orders = self.pm.size_orders(allocations, prices, equity)
         approved, vetoes = self.risk.review(orders, state=state, equity=equity)
+        self._record_risk_forecasts(approved)
 
         # attach sized quantities back onto the allocations for reporting
         qty_by_symbol = {o["symbol"]: o.get("quantity") for o in orders}
@@ -90,6 +112,62 @@ class Desk:
             advisor_notes=advisor_notes,
         )
 
+    # -- optional stages ----------------------------------------------------
+    def _debate_weights(self) -> dict[str, float] | None:
+        if not self.ledger_path:
+            return None
+        from .track_record import AgentLedger, debate_weights
+
+        ledger = AgentLedger(self.ledger_path)
+        scores = {k: v["score"] for k, v in ledger.scores().items()}
+        return debate_weights(scores) if scores else None
+
+    def _run_debate(self, briefs: list[Brief]) -> list[Brief]:
+        if not self.debate_rounds:
+            return briefs
+        from .debate import debate_brief
+
+        weights = self._debate_weights()
+        return [debate_brief(b, rounds=self.debate_rounds, weights=weights)
+                for b in briefs]
+
+    def _run_overfit_gate(self, briefs: list[Brief]) -> list[Brief]:
+        if not self.overfit_gate:
+            return briefs
+        from .adapters import gate_briefs_with_overfit
+
+        briefs, _ = gate_briefs_with_overfit(
+            briefs, returns_provider=self.idea_returns)
+        return briefs
+
+    def _record_ledger(self, briefs: list[Brief]) -> None:
+        if not self.ledger_path:
+            return
+        from .track_record import AgentLedger, idea_id
+
+        ledger = AgentLedger(self.ledger_path)
+        for brief in briefs:
+            for idea in brief.ideas:
+                iid = ledger.record_proposal(brief.agent, idea.to_dict())
+                overfit = (idea.debate or {}).get("overfit") or {}
+                if overfit.get("verdict") in ("PASS", "FAIL"):
+                    ledger.record_desk_verdict(
+                        iid, "PASS" if overfit["verdict"] == "PASS" else "KILL")
+
+    def _record_risk_forecasts(self, approved: list[dict]) -> None:
+        if not self.ledger_path:
+            return
+        from .track_record import AgentLedger, idea_id
+
+        ledger = AgentLedger(self.ledger_path)
+        for order in approved:
+            idea = order.get("idea")
+            if idea is None:
+                continue
+            idea_dict = idea.to_dict() if hasattr(idea, "to_dict") else dict(idea)
+            ledger.record_risk_forecast(
+                "risk_manager", idea_id(idea_dict), self.risk.forecast(idea))
+
     def _run_research(
         self, provider, strategy_factory, backtest_fn, parallel: bool
     ) -> list[Brief]:
@@ -105,12 +183,27 @@ class Desk:
 
 
 def default_desk(
-    advisor: Callable[[str], str] | None = None, **pm_kwargs
+    advisor: Callable[[str], str] | None = None,
+    debate_rounds: int = 0,
+    overfit_gate: bool = False,
+    idea_returns: Callable[[dict], list[float] | None] | None = None,
+    ledger_path: str | None = None,
+    **pm_kwargs,
 ) -> Desk:
-    """The standard desk: all seven scouts + PM + risk manager."""
+    """The standard desk: all seven scouts + PM + risk manager.
+
+    ``debate_rounds`` / ``overfit_gate`` / ``idea_returns`` /
+    ``ledger_path`` enable the debate protocol, the overfitting-desk
+    promotion gate, and the track-record ledger; remaining kwargs go to
+    the portfolio manager.
+    """
     return Desk(
         researchers=[cls() for cls in SCOUT_CLASSES],
         portfolio_manager=PortfolioManagerAgent(**pm_kwargs),
         risk_agent=RiskManagerAgent(),
         advisor=advisor,
+        debate_rounds=debate_rounds,
+        overfit_gate=overfit_gate,
+        idea_returns=idea_returns,
+        ledger_path=ledger_path,
     )

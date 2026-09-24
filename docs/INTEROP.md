@@ -68,6 +68,30 @@ Desk-approved orders flow to `trade-paper`'s approval queue only after
 risk review passes. Sentiment ideas clear the same gates as backtested
 ideas — no fast lane.
 
+`adapters.to_paper_approval(orders)` shapes approved orders into
+approval payloads carrying the full evidence chain: the idea's metrics,
+the debate synthesis conviction, and the overfit-desk verdict sit in
+`chain`, so the human approver sees *why* the desk wants the trade, not
+just the ticket. trade-paper's `ledger.submit_approval` accepts these
+payloads as the discovery `d` (key/strategy/symbols/direction/metrics/
+score) with `chain` as the chain verdict.
+
+## trade-overfit (the promotion gate) *(new in v0.2.0)*
+
+`adapters.gate_briefs_with_overfit(briefs, returns_provider)` runs every
+idea through the `trade-overfit` desk (lazy import) *after* the debate
+and *before* the PM: only PASS ideas reach the portfolio manager.
+`returns_provider(idea_dict) -> returns | None` supplies each idea's
+in-sample returns series (e.g. from its backtest); ideas without a
+series are KILLED — missing data never passes, the suite convention.
+
+Fail-soft: if `trade-overfit` is not installed, or no returns provider
+is given, the gate is skipped with a note in each brief and ideas flow
+through — the desk never crashes on validation. Desk verdicts feed the
+track-record ledger (`record_desk_verdict`), closing the accountability
+loop: researchers are penalized for KILLs and only earn outcomes on
+PASSes.
+
 ## Adding a researcher
 
 1. Subclass `Agent` in `src/trade_agents/scouts.py` (or a new module

@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-24
+
+### Added
+- **Agent debate protocol** (`debate.py`): every idea is argued by a
+  bull challenger and a bear challenger across configurable rounds
+  (default 1) before the PM sees it; the original researcher
+  synthesizes into a scored brief (conviction 0–1, bull/bear summaries,
+  open questions). Full transcript attaches to `TradeIdea.debate` as
+  plain data. Rules mode is default — deterministic, template-driven,
+  no LLM needed; a lazy fail-soft `llm_challenger(idea, stance,
+  context)` hook can replace either challenger (exceptions fall back
+  to rules). Debate vote weights scale with track record.
+- **Track-record / incentive system** (`track_record.py`): rule-based,
+  never LLM-judged (Goodhart's law — only realized numbers count).
+  `AgentLedger` JSONL store: proposals, overfit-desk verdicts
+  (PASS/KILL), OOS outcomes, risk forecasts, PM outcomes. Researcher
+  score = decayed mean of adopted ideas' OOS Sharpe minus 0.25 per
+  KILL, with a 90-day half-life clawback; risk desk scored 1 − Brier
+  on drawdown forecasts; PM scored Sharpe − 1.5 × maxDD per run;
+  `debate_weights` = softmax(score/temperature); `leaderboard()`
+  ranks agents with evidence counts. New agents start at a neutral
+  prior.
+- **Overfit promotion gate** (`adapters.gate_briefs_with_overfit`):
+  debated ideas must PASS the `trade-overfit` desk to reach the PM
+  (lazy import, fail-soft; missing returns kill the idea). Desk
+  verdicts feed researcher track records — the accountability loop.
+- **trade-paper approval payloads** (`adapters.to_paper_approval`):
+  approved orders carry the debate synthesis + overfit verdict in the
+  approval chain for the human approver.
+- `RiskManagerAgent.forecast(idea)`: rule-based drawdown-probability
+  forecast feeding the calibration score.
+- `Desk` gains `debate_rounds`, `overfit_gate`, `idea_returns`,
+  `ledger_path` (all optional, all off by default); `default_desk()`
+  passes them through.
+- CLI: `trade-agents debate (--demo good|bad | --idea FILE)`,
+  `trade-agents leaderboard --ledger PATH`, plus `license` and
+  `update-check` stub hooks; `licensing.py`; `[project.scripts]`
+  entry point; `examples/debate_example.py`.
+- `docs/METHODOLOGY.md`: debate aggregation, incentive formulas, Brier
+  score, and why the judge is rule-based; README "The maths" extended;
+  `docs/ARCHITECTURE.md` + `docs/INTEROP.md` updated.
+
 ## [0.1.2] - 2026-09-23
 
 ### Added

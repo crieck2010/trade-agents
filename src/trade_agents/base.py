@@ -61,6 +61,7 @@ class TradeIdea:
     score: float
     conviction: float  # 0..1
     thesis: str = ""
+    debate: dict = field(default_factory=dict)  # debate.py transcript + synthesis
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:

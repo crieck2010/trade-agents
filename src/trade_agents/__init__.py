@@ -29,9 +29,30 @@ from .base import (
     TradeIdea,
     Veto,
 )
+from .debate import (
+    debate_brief,
+    debate_idea,
+    debate_ideas,
+    debate_to_prompt,
+    rule_bear,
+    rule_bull,
+    synthesize,
+)
 from .desk import Desk, default_desk
+from .track_record import (
+    AgentLedger,
+    debate_weights,
+    idea_id,
+    leaderboard,
+    max_drawdown,
+    oos_sharpe,
+    pm_score,
+    researcher_score,
+    risk_calibration_score,
+    score_all,
+)
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -43,5 +64,24 @@ __all__ = [
     "Veto",
     "Desk",
     "default_desk",
+    # debate protocol (v0.2.0)
+    "debate_idea",
+    "debate_ideas",
+    "debate_brief",
+    "debate_to_prompt",
+    "synthesize",
+    "rule_bull",
+    "rule_bear",
+    # track-record / incentives (v0.2.0)
+    "AgentLedger",
+    "idea_id",
+    "oos_sharpe",
+    "max_drawdown",
+    "researcher_score",
+    "risk_calibration_score",
+    "pm_score",
+    "debate_weights",
+    "score_all",
+    "leaderboard",
     "__version__",
 ]

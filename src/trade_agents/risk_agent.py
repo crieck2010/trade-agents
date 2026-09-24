@@ -72,3 +72,21 @@ class RiskManagerAgent(Agent):
         for limit in manager.limits:
             if limit.name == "kill_switch" and hasattr(limit, "trip"):
                 limit.trip()
+
+    def forecast(self, idea) -> dict:
+        """The risk desk's stated belief about an idea, for calibration scoring.
+
+        Rule-based heuristic (documented, auditable): map the idea's own
+        backtest max drawdown to the probability that *realized* drawdown
+        exceeds 10%.  ``record_risk_forecast`` in the track-record ledger
+        stores this; the Brier score later judges whether the mapping was
+        calibrated.  ``idea`` may be a ``TradeIdea`` or an idea dict.
+        """
+        metrics = idea.metrics if hasattr(idea, "metrics") else (idea.get("metrics") or {})
+        dd = float(metrics.get("max_drawdown") or 0.0)
+        vol = metrics.get("annualized_volatility")
+        return {
+            "dd_threshold": 0.10,
+            "p_exceed": round(max(0.05, min(0.95, dd / 0.20)), 4),
+            "pred_vol": round(float(vol) if vol else 0.20, 4),
+        }

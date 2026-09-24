@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-
 def make_strategy_factory() -> Callable:
     """``(name, symbols, params) -> strategy`` via trade-strategies."""
     try:
@@ -161,3 +160,129 @@ def order_to_intent(order: dict):
         quantity=order.get("quantity"),
         price=order.get("price"),
     )
+
+
+# -- trade-overfit: the promotion gate --------------------------------------
+def overfit_available() -> bool:
+    """True when the trade-overfit package imports."""
+    try:
+        import trade_overfit  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def gate_ideas_with_overfit(
+    ideas: list,
+    returns_provider: Callable[[dict], list[float] | None] | None = None,
+    preset: str = "standard",
+    **validate_kw,
+) -> dict:
+    """Run debated ideas through the overfitting desk.
+
+    ``returns_provider(idea_dict) -> returns | None`` supplies the
+    in-sample returns series per idea (e.g. from its backtest).  Returns
+    ``{"passed", "killed", "skipped", "reason"}``; passed ideas carry the
+    desk verdict under ``idea.debate["overfit"]``.
+
+    Fail-soft semantics (the desk never crashes on validation):
+    - trade-overfit not installed -> everything passes, ``skipped=True``.
+    - no ``returns_provider`` -> everything passes, ``skipped=True``.
+    - an idea with no returns -> KILLED (missing data never passes —
+      suite convention), recorded in the kill report.
+    """
+    from dataclasses import replace
+
+    if not overfit_available():
+        return {"passed": list(ideas), "killed": [],
+                "skipped": True,
+                "reason": "trade-overfit not installed; gate skipped"}
+    if returns_provider is None:
+        return {"passed": list(ideas), "killed": [],
+                "skipped": True,
+                "reason": "no returns provider; gate skipped"}
+    from trade_overfit.gates import validate
+
+    passed, killed = [], []
+    for idea in ideas:
+        idea_dict = idea.to_dict() if hasattr(idea, "to_dict") else dict(idea)
+        returns = returns_provider(idea_dict)
+        if not returns:
+            killed.append({"idea": idea_dict,
+                           "reason": "no returns series: missing data never passes"})
+            continue
+        verdict = validate(returns, **validate_kw)
+        verdict["preset"] = preset
+        stamped = replace(idea, debate={**idea.debate, "overfit": {
+            "verdict": verdict["verdict"],
+            "n_gates_passed": verdict["n_gates_passed"],
+            "n_gates": verdict["n_gates"],
+            "evidence": verdict["evidence"],
+        }}) if hasattr(idea, "debate") else idea
+        if verdict["verdict"] == "PASS":
+            passed.append(stamped)
+        else:
+            killed.append({"idea": idea_dict, "reason": "overfit desk FAIL",
+                           "gates": verdict["gates"]})
+    return {"passed": passed, "killed": killed, "skipped": False,
+            "reason": f"{len(passed)} passed, {len(killed)} killed"}
+
+
+def gate_briefs_with_overfit(briefs: list, returns_provider=None,
+                             preset: str = "standard", **validate_kw) -> tuple[list, dict]:
+    """Apply :func:`gate_ideas_with_overfit` per brief; returns
+    ``(new_briefs, report)``.  Kill counts land in each brief's notes."""
+    from .base import Brief
+
+    all_killed: list[dict] = []
+    new_briefs = []
+    for brief in briefs:
+        result = gate_ideas_with_overfit(list(brief.ideas), returns_provider,
+                                         preset, **validate_kw)
+        all_killed.extend(result["killed"])
+        notes = dict(brief.notes)
+        notes["overfit_gate"] = {
+            "passed": len(result["passed"]), "killed": len(result["killed"]),
+            "skipped": result["skipped"], "reason": result["reason"],
+        }
+        new_briefs.append(Brief(agent=brief.agent, niche=brief.niche,
+                                ideas=tuple(result["passed"]),
+                                notes=notes, as_of=brief.as_of))
+    report = {"killed": all_killed,
+              "skipped": any(b.notes["overfit_gate"]["skipped"] for b in new_briefs)}
+    return new_briefs, report
+
+
+# -- trade-paper: approval-queue payloads -----------------------------------
+def to_paper_approval(orders: list[dict]) -> list[dict]:
+    """Shape desk-approved orders for trade-paper's approval queue.
+
+    Each payload carries the idea's evidence chain — debate synthesis
+    and overfit verdict — so the human approver sees *why* the desk
+    wants the trade, not just the ticket.  trade-paper's
+    ``ledger.submit_approval`` accepts these as the discovery ``d``
+    (key/strategy/symbols/direction/metrics/score) with ``chain`` holding
+    the debate + overfit evidence.
+    """
+    from .track_record import idea_id
+
+    payloads = []
+    for order in orders:
+        idea = order.get("idea")
+        idea_dict = idea.to_dict() if hasattr(idea, "to_dict") else dict(idea or {})
+        debate = idea_dict.get("debate") or {}
+        payloads.append({
+            "key": idea_id(idea_dict),
+            "strategy": idea_dict.get("strategy", ""),
+            "symbols": [order.get("symbol")],
+            "direction": idea_dict.get("direction", "long"),
+            "metrics": {**(idea_dict.get("metrics") or {}),
+                        "debate_conviction": (debate.get("synthesis") or {}).get("conviction"),
+                        "overfit_verdict": (debate.get("overfit") or {}).get("verdict")},
+            "score": idea_dict.get("score", 0.0),
+            "chain": {"debate": debate.get("synthesis"),
+                      "overfit": debate.get("overfit"),
+                      "thesis": idea_dict.get("thesis", "")},
+            "order": {k: v for k, v in order.items() if k != "idea"},
+        })
+    return payloads
