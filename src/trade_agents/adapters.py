@@ -254,7 +254,9 @@ def gate_briefs_with_overfit(briefs: list, returns_provider=None,
 
 
 # -- trade-paper: approval-queue payloads -----------------------------------
-def to_paper_approval(orders: list[dict]) -> list[dict]:
+def to_paper_approval(
+    orders: list[dict], regime_context: dict | None = None
+) -> list[dict]:
     """Shape desk-approved orders for trade-paper's approval queue.
 
     Each payload carries the idea's evidence chain — debate synthesis
@@ -263,8 +265,32 @@ def to_paper_approval(orders: list[dict]) -> list[dict]:
     ``ledger.submit_approval`` accepts these as the discovery ``d``
     (key/strategy/symbols/direction/metrics/score) with ``chain`` holding
     the debate + overfit evidence.
+
+    ``regime_context`` is a raw trade-regime snapshot (or a normalized
+    one, e.g. ``Desk.last_regime``); it is normalized internally and
+    fail-soft, then attached as ``payload["regime"]`` *and*
+    ``payload["chain"]["regime"]`` (the same dict) so both direct
+    readers and the ledger-stored chain JSON see the regime the desk
+    sized on.
     """
+    from .regime import normalize_regime_context
     from .track_record import idea_id
+
+    normalized = normalize_regime_context(regime_context)
+    regime_block = {
+        "conviction": normalized["conviction"],
+        "hysteresis_state": normalized["hysteresis_state"],
+        "hysteresis_reason": normalized["hysteresis_reason"],
+        "hysteresis_prior_conviction": normalized["hysteresis_prior_conviction"],
+        "components": normalized["components"],
+        "exposure_scale_advisory": normalized["exposure_scale_advisory"],
+        "size_scale_applied": normalized["size_scale_applied"],
+        "provenance": normalized["provenance"],
+        "timestamp": normalized["timestamp"],
+        "staleness_seconds": normalized["staleness_seconds"],
+        "is_fallback": normalized["is_fallback"],
+        "fallback_reason": normalized["fallback_reason"],
+    }
 
     payloads = []
     for order in orders:
@@ -280,9 +306,11 @@ def to_paper_approval(orders: list[dict]) -> list[dict]:
                         "debate_conviction": (debate.get("synthesis") or {}).get("conviction"),
                         "overfit_verdict": (debate.get("overfit") or {}).get("verdict")},
             "score": idea_dict.get("score", 0.0),
+            "regime": regime_block,
             "chain": {"debate": debate.get("synthesis"),
                       "overfit": debate.get("overfit"),
-                      "thesis": idea_dict.get("thesis", "")},
+                      "thesis": idea_dict.get("thesis", ""),
+                      "regime": regime_block},
             "order": {k: v for k, v in order.items() if k != "idea"},
         })
     return payloads

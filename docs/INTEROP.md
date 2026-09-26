@@ -92,6 +92,41 @@ track-record ledger (`record_desk_verdict`), closing the accountability
 loop: researchers are penalized for KILLs and only earn outcomes on
 PASSes.
 
+## trade-regime (fused market context) *(new in v0.3.0)*
+
+`trade-regime`'s `market_context_provider` is the desk's **canonical
+regime input**: one fused snapshot (`source: "trade-regime"`,
+`schema_version: 1`) carrying graded conviction 0–100, the hysteresis
+state/reason, per-component readings (breadth/macro/vol), and an
+`exposure_scale_advisory`. This supersedes individual breadth/macro
+wiring for sizing decisions — the direct paths are untouched
+(`cross_asset_regime_monitor` still researches, `regime_tilt` still
+tilts weights; see `docs/ARCHITECTURE.md`).
+
+The integration follows the repo's rules: no `trade_regime` import
+anywhere (the snapshot is programmed against its pinned shape),
+normalization never raises, and conviction **advises and scales** —
+it never overrides the overfit-desk gate or the risk-desk review, which
+run unchanged and remain final:
+
+- `regime.normalize_regime_context(raw, max_age_seconds=172800)` →
+  canonical dict. Missing / malformed / stale (>48h — two missed daily
+  inputs) / unparseable-timestamp snapshots degrade to an *explicit*
+  fallback (`conviction=50.0`, `size_scale=0.5`, `is_fallback=True`,
+  `fallback_reason` in `{"missing", "stale", "invalid: <detail>"}`),
+  never silently.
+- `Desk(regime_context=..., regime_max_age_seconds=...)` normalizes
+  once per run into `desk.last_regime` and passes
+  `regime.conviction_size_scale()` into
+  `PM.size_orders(..., size_scale=...)`. Quantities scale (80→×0.8,
+  30→×0.3, 0→×0.0, desk stands down); weights are untouched, so the
+  evidence chain in idea scores stays undistorted.
+- `DeskReport.regime` carries the normalized context into
+  `to_dict()`/`summary()`; `adapters.to_paper_approval(orders,
+  regime_context)` attaches the regime block as both
+  `payload["regime"]` and `payload["chain"]["regime"]` for direct
+  readers and the ledger-stored chain JSON.
+
 ## Adding a researcher
 
 1. Subclass `Agent` in `src/trade_agents/scouts.py` (or a new module

@@ -136,6 +136,52 @@ for row in ledger.leaderboard():                 # ranked agents + weights
 `trade-agents debate --demo good` debates a seeded idea from the CLI;
 `trade-agents leaderboard --ledger desk_ledger.jsonl` ranks the desk.
 
+## Regime-aware sizing
+
+The desk consumes **trade-regime's fused market context** as its
+canonical regime input — one graded conviction number (0–100) fusing
+breadth, macro, and volatility, instead of the desk's own per-symbol
+regime labels or ad-hoc breadth/macro wiring. Conviction **advises and
+scales**: it multiplies order quantities, nothing else.
+
+| Conviction | Quantity multiplier | Desk behavior |
+|---|---|---|
+| 80 | ×0.8 | normal size, slightly reduced |
+| 30 | ×0.3 | materially reduced |
+| 50 (or any fallback) | ×0.5 | explicit neutral sizing |
+| 100 | ×1.0 | full size |
+| 0 | ×0.0 | **desk stands down — no orders** |
+
+0 is the graded design's natural endpoint, not a veto override: the
+PM simply sizes everything to zero. The overfit-desk gate and the
+risk-desk review run **unchanged and remain final** — conviction never
+promotes a bad idea and never blocks a veto.
+
+Sizing happens at the PM layer on purpose: idea scores are *backtest
+evidence*, and scaling them by regime would distort the evidence
+chain (a great idea scored in a risk-off month would read as a worse
+idea). Conviction therefore enters only as `size_scale` on
+`PM.size_orders()`. The per-symbol `regime_tilt` (1.25× toward the
+favored family) still exists and is untouched — it tilts *weights*,
+conviction scales *quantities*.
+
+```python
+from trade_agents import Desk
+
+snapshot = regime_provider.market_context()  # pinned contract, schema_version 1
+desk = Desk(regime_context=snapshot, regime_max_age_seconds=172_800)
+report = desk.run(provider)
+print(report.regime["size_scale_applied"], report.regime["hysteresis_state"])
+```
+
+`regime.normalize_regime_context` never raises and never silently
+pretends: a missing, malformed, stale (>48h by default — two missed
+daily inputs), or unparseable-timestamp snapshot becomes an explicit
+fallback (conviction 50.0, scale 0.5) with `is_fallback`/`fallback_reason`
+recorded in the report and the trade-paper approval chain. Read the
+report, not your hopes: if `report.regime["is_fallback"]` is true, the
+desk sized on neutral, not on signal.
+
 ## The LLM seam
 
 Agents produce structured `Brief` objects. Render one for an LLM
@@ -208,7 +254,7 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.2.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.3.0**.
 
 ## The maths
 
@@ -263,6 +309,13 @@ oversized. Every step is a closed-form formula, not a black box.
 - *Debate weights* (`track_record.debate_weights`):
   `weightᵢ = softmax(scoreᵢ/temperature)`, floored at 0.05 and
   renormalized — every agent stays audible, the best record is loudest.
+- *Regime sizing* (`regime.conviction_size_scale`):
+  `quantity = (wᵢ × equity / priceᵢ) × scale`, where
+  `scale = clamp(exposure_scale_advisory, 0, 1)` — the desk's documented
+  mapping is conviction/100 (80→0.8, 30→0.3, 50→0.5, 100→1.0, 0→0.0).
+  Weights are untouched; only quantities shrink. Sizing enters *after*
+  allocation, so idea scores (backtest evidence) are never distorted by
+  regime, and the overfit gate + risk veto still see the full idea.
 
 **Honest limitations.**
 
@@ -286,3 +339,22 @@ oversized. Every step is a closed-form formula, not a black box.
   and the softmax temperature are conventions, not estimates — they
   encode the desk's values (recent evidence, accountability, humility),
   not calibrated optima.
+- **Graded, not buckets.** The desk deliberately avoids labelled regime
+  buckets ("risk-on"/"risk-off") at the sizing layer: noisy regime
+  signals carry false precision, and a bucket boundary turns a 49→51
+  wobble into a portfolio-size discontinuity. Conviction scales
+  continuously (with hysteresis already applied upstream by
+  trade-regime), so sizing moves smoothly with the signal — and degrades
+  to the explicit 0.5 fallback when the snapshot is missing, malformed,
+  or older than 48 hours.
+- The 0.5 fallback is honest neutral, not magic: it halves exposure
+  when the desk has no regime read, on the theory that halving is the
+  defensible neutral. Two missed daily inputs (>48h) retire the
+  snapshot entirely — the desk will not size on a two-day-old read of
+  the market.
+- The conviction→scale mapping is linear by convention
+  (`scale = conviction/100`), not estimated: it encodes "trust the
+  fused read proportionally", nothing more. It does not model
+  convexity (fear should arguably cut faster than optimism adds), tail
+  risk, or cross-asset regime differences — the fused context does that
+  upstream.

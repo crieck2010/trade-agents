@@ -35,13 +35,18 @@ researchers (parallel) ──Brief(TradeIdea[])──▶ debate (bull vs bear, r
                                                         ▼ conviction updated
                                               overfit gate (trade-overfit)
                                               PASS only ──▶ PM.rank() ──ranked──▶ PM.allocate()
+                                                                │
+                                               trade-regime fused context ──▶ PM.size_orders(size_scale)
+                                               (normalized once per run;      │ quantities × conviction/100,
+                                                fallback = 50/0.5)            │ weights untouched
                                                                           ┌─orders──▶ risk_agent.review()
                                                                           │              (trade-risk limits,
                                                                           │               cumulative fills,
                                                                           │               kill switch)
                                                                           ▼
                                               DeskReport(briefs, allocations,
-                                                         approved_orders, vetoes)
+                                                         approved_orders, vetoes,
+                                                         regime)
                                               ledger: proposals, verdicts,
                                                       risk forecasts (incentive loop)
 ```
@@ -63,6 +68,16 @@ researchers (parallel) ──Brief(TradeIdea[])──▶ debate (bull vs bear, r
    applies the regime tilt (from `cross_asset_regime_monitor`), and
    sizes allocations (inverse-volatility or score-weighted, per-idea
    caps). An optional LLM advisor can re-rank via `RANK` lines.
+4b. **Regime-aware sizing** — when `regime_context` is supplied, the
+   desk normalizes the trade-regime fused snapshot once per run and
+   scales order quantities by conviction
+   (`size_scale = clamp(exposure_scale_advisory, 0, 1)`; 80→×0.8,
+   30→×0.3, 0→×0.0, desk stands down). Sizing lives at the PM layer on
+   purpose: idea scores are backtest evidence, and scaling them by
+   regime would distort the evidence chain. The snapshot degrades to an
+   explicit fallback (conviction 50.0, scale 0.5) when missing,
+   malformed, or older than `regime_max_age_seconds` (default 48h).
+   The overfit gate and risk review run unchanged and stay final.
 5. **Risk review** — every order passes the `trade-risk` limit stack
    (first veto wins; exits never blocked). Cumulative fill tracking
    spans orders; the kill switch halts the desk.

@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-26
+
+### Added
+- **Regime-aware sizing** (`regime.py`): the desk consumes
+  trade-regime's *fused* market context as its canonical regime input
+  (programmed against the pinned `market_context_provider` shape,
+  `source="trade-regime"`, `schema_version=1` — `trade_regime` is never
+  imported). `normalize_regime_context()` validates the snapshot and
+  never raises: missing / malformed / stale (>48h by default — two
+  missed daily inputs) / unparseable-timestamp snapshots degrade to an
+  explicit fallback (conviction 50.0, scale 0.5) with
+  `is_fallback`/`fallback_reason` in `{"missing", "stale",
+  "invalid: <detail>"}`. `conviction_size_scale()` maps advisory to a
+  quantity multiplier clamped to [0, 1]: 80→×0.8, 30→×0.3, 50 (or
+  fallback)→×0.5, 100→×1.0, 0→×0.0 (desk stands down — the graded
+  design's natural endpoint, not a veto override).
+- `PortfolioManagerAgent.size_orders(..., size_scale=1.0)`: multiplies
+  every order quantity by `size_scale` (weights untouched; default 1.0
+  preserves old behavior). Sizing lives at the PM layer on purpose:
+  idea scores are backtest evidence — scaling them by regime would
+  distort the evidence chain — and the overfit gate still kills bad
+  ideas regardless of conviction.
+- `Desk(regime_context=..., regime_max_age_seconds=172800)`:
+  normalizes once per run into `desk.last_regime`, passes `size_scale`
+  into `size_orders`; `DeskReport.regime` lands in `to_dict()` and gets
+  a one-line summary in `summary()`. The overfit-desk gate and
+  risk-desk review run unchanged and remain final — conviction advises
+  and scales, never overrides hard constraints.
+- `adapters.to_paper_approval(orders, regime_context=None)`:
+  normalizes internally (fail-soft) and attaches the regime block
+  (conviction, hysteresis state/reason/prior, components, advisory,
+  size scale, provenance, timestamp, staleness, fallback flags) as both
+  `payload["regime"]` and `payload["chain"]["regime"]` (same dict).
+  Signature is backwards compatible.
+- README "Regime-aware sizing" section + "The maths" treatment of the
+  conviction→decision mapping (graded-not-buckets, fallback honesty);
+  `docs/INTEROP.md` trade-regime section (canonical fused context
+  supersedes individual breadth/macro wiring; direct paths untouched);
+  `docs/ARCHITECTURE.md` pipeline diagram + stage note.
+- `tests/test_regime.py`: normalization (valid/timestamp formats/
+  missing/stale/malformed/passthrough/derived advisory), the exact
+  conviction→scale mapping, `size_orders` scale, desk end-to-end
+  (conviction-80 quantities = 0.8× full-conviction run, weights
+  unchanged, regime incl. hysteresis in the report), fallback paths,
+  and paper-approval regime blocks (top-level + chain, JSON-safe).
+
 ## [0.2.0] - 2026-09-24
 
 ### Added

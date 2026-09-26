@@ -39,6 +39,11 @@ from .debate import (
     synthesize,
 )
 from .desk import Desk, default_desk
+from .regime import (
+    DEFAULT_MAX_AGE_SECONDS,
+    conviction_size_scale,
+    normalize_regime_context,
+)
 from .track_record import (
     AgentLedger,
     debate_weights,
@@ -52,7 +57,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -64,6 +69,10 @@ __all__ = [
     "Veto",
     "Desk",
     "default_desk",
+    # regime-aware sizing (v0.3.0)
+    "normalize_regime_context",
+    "conviction_size_scale",
+    "DEFAULT_MAX_AGE_SECONDS",
     # debate protocol (v0.2.0)
     "debate_idea",
     "debate_ideas",

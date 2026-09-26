@@ -13,6 +13,13 @@ Optional stages (all off by default, all fail-soft):
   returns series are killed (missing data never passes).
 - ``ledger_path``: record proposals, desk verdicts, and risk forecasts
   into a track-record JSONL ledger for the incentive system.
+- ``regime_context``: a trade-regime fused-context snapshot (see
+  ``regime.normalize_regime_context``).  Its conviction *scales order
+  quantities* via the PM's ``size_scale`` — it never overrides the
+  overfit gate or the risk review, which stay final.  Sizing lives at
+  the PM layer on purpose: idea scores are backtest evidence, and
+  scaling them by regime would distort the evidence chain; the gate
+  still kills bad ideas no matter how high conviction runs.
 """
 
 from __future__ import annotations
@@ -22,6 +29,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .base import Allocation, BarsProvider, Brief, DeskReport
 from .portfolio_manager import PortfolioManagerAgent
+from .regime import (
+    DEFAULT_MAX_AGE_SECONDS,
+    conviction_size_scale,
+    normalize_regime_context,
+)
 from .risk_agent import RiskManagerAgent
 from .scouts import SCOUT_CLASSES, CrossAssetRegimeMonitor
 
@@ -37,6 +49,8 @@ class Desk:
         overfit_gate: bool = False,
         idea_returns: Callable[[dict], list[float] | None] | None = None,
         ledger_path: str | None = None,
+        regime_context: dict | None = None,
+        regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
     ) -> None:
         self.researchers = (
             researchers if researchers is not None
@@ -49,6 +63,9 @@ class Desk:
         self.overfit_gate = overfit_gate
         self.idea_returns = idea_returns
         self.ledger_path = ledger_path
+        self.regime_context = regime_context
+        self.regime_max_age_seconds = regime_max_age_seconds
+        self.last_regime: dict = {}  # normalized snapshot of the most recent run
 
     def run(
         self,
@@ -61,6 +78,14 @@ class Desk:
 
         strategy_factory = make_strategy_factory()
         backtest_fn = make_backtest_fn()
+
+        # Normalize once per run: conviction scales quantities only — the
+        # overfit gate and risk review below run unchanged and stay final.
+        self.last_regime = normalize_regime_context(
+            self.regime_context,
+            max_age_seconds=self.regime_max_age_seconds,
+        )
+        size_scale = conviction_size_scale(self.last_regime)
 
         briefs = self._run_research(provider, strategy_factory, backtest_fn, parallel)
         briefs = self._run_debate(briefs)
@@ -87,7 +112,7 @@ class Desk:
             symbol: provider.last_price(symbol)
             for symbol in {a.idea.symbol for a in allocations}
         }
-        orders = self.pm.size_orders(allocations, prices, equity)
+        orders = self.pm.size_orders(allocations, prices, equity, size_scale=size_scale)
         approved, vetoes = self.risk.review(orders, state=state, equity=equity)
         self._record_risk_forecasts(approved)
 
@@ -110,6 +135,7 @@ class Desk:
             approved_orders=tuple(approved),
             vetoes=tuple(vetoes),
             advisor_notes=advisor_notes,
+            regime=dict(self.last_regime),
         )
 
     # -- optional stages ----------------------------------------------------
@@ -188,14 +214,17 @@ def default_desk(
     overfit_gate: bool = False,
     idea_returns: Callable[[dict], list[float] | None] | None = None,
     ledger_path: str | None = None,
+    regime_context: dict | None = None,
+    regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
     **pm_kwargs,
 ) -> Desk:
     """The standard desk: all seven scouts + PM + risk manager.
 
     ``debate_rounds`` / ``overfit_gate`` / ``idea_returns`` /
     ``ledger_path`` enable the debate protocol, the overfitting-desk
-    promotion gate, and the track-record ledger; remaining kwargs go to
-    the portfolio manager.
+    promotion gate, and the track-record ledger; ``regime_context``
+    supplies the trade-regime fused context that scales order
+    quantities; remaining kwargs go to the portfolio manager.
     """
     return Desk(
         researchers=[cls() for cls in SCOUT_CLASSES],
@@ -206,4 +235,6 @@ def default_desk(
         overfit_gate=overfit_gate,
         idea_returns=idea_returns,
         ledger_path=ledger_path,
+        regime_context=regime_context,
+        regime_max_age_seconds=regime_max_age_seconds,
     )

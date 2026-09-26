@@ -153,6 +153,7 @@ class DeskReport:
     approved_orders: tuple = ()
     vetoes: tuple = ()
     advisor_notes: str = ""
+    regime: dict = field(default_factory=dict)  # trade-regime context (v0.3.0)
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:
@@ -163,6 +164,7 @@ class DeskReport:
             "approved_orders": [dict(o) for o in self.approved_orders],
             "vetoes": [v.to_dict() for v in self.vetoes],
             "advisor_notes": self.advisor_notes,
+            "regime": dict(self.regime),
         }
 
     def to_json(self) -> str:
@@ -188,9 +190,28 @@ class DeskReport:
             lines.append(
                 f"  VETO {o.get('symbol')} [{veto.limit}]: {veto.reason}"
             )
+        lines.append(self._regime_line())
         if self.advisor_notes:
             lines.append(f"Advisor: {self.advisor_notes[:400]}")
         return "\n".join(lines)
+
+    def _regime_line(self) -> str:
+        r = self.regime or {}
+        if not r:
+            return "Regime: none supplied"
+        if r.get("is_fallback"):
+            return (
+                f"Regime: FALLBACK (conviction={r.get('conviction')}, "
+                f"size_scale={r.get('size_scale_applied')}, "
+                f"reason={r.get('fallback_reason')})"
+            )
+        return (
+            f"Regime: conviction={r.get('conviction')}, "
+            f"hysteresis={r.get('hysteresis_state')} "
+            f"({r.get('hysteresis_reason')}), "
+            f"size_scale={r.get('size_scale_applied')}, "
+            f"staleness={r.get('staleness_seconds')}"
+        )
 
 
 # -- agent base ----------------------------------------------------------

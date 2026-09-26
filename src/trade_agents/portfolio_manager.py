@@ -131,20 +131,34 @@ class PortfolioManagerAgent(Agent):
         allocations: list[Allocation],
         prices: dict[str, float],
         equity: float,
+        size_scale: float = 1.0,
     ) -> list[dict]:
-        """Turn allocations into order dicts the risk agent can review."""
+        """Turn allocations into order dicts the risk agent can review.
+
+        ``size_scale`` multiplies every order quantity (weights are
+        untouched).  It is the desk's hook for trade-regime conviction:
+        conviction advises *sizing*, not idea scoring — idea scores are
+        backtest evidence, and scaling them by regime would distort the
+        evidence chain.  The default 1.0 preserves the old behavior.
+        """
+        try:
+            scale = float(size_scale)
+        except (TypeError, ValueError):
+            scale = 1.0
+        scale = max(scale, 0.0)
         orders = []
         for alloc in allocations:
             price = prices.get(alloc.idea.symbol)
             if not price or price <= 0:
                 continue
-            quantity = alloc.weight * equity / price
+            quantity = alloc.weight * equity / price * scale
             orders.append(
                 {
                     "symbol": alloc.idea.symbol,
                     "side": "LONG" if alloc.idea.direction == "long" else "SHORT",
                     "quantity": quantity,
                     "price": price,
+                    "size_scale": scale,
                     "idea": alloc.idea,
                 }
             )
