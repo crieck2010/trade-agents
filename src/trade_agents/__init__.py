@@ -46,6 +46,13 @@ from .debate import (
     synthesize,
 )
 from .desk import Desk, default_desk
+from .portfolio_manager import (
+    COMPLEXITY_BUDGET,
+    MARGINAL_EPSILON,
+    MARGINAL_MIN_OVERLAP,
+    MARGINAL_RHO_MAX,
+    PortfolioManagerAgent,
+)
 from .regime import (
     DEFAULT_MAX_AGE_SECONDS,
     conviction_size_scale,
@@ -78,7 +85,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -109,6 +116,12 @@ __all__ = [
     "razor_idea",
     "razor_brief",
     "attach_razor",
+    # Occam's Desk phase 3: marginal ranking + complexity budget (v0.6.0)
+    "PortfolioManagerAgent",
+    "MARGINAL_EPSILON",
+    "MARGINAL_RHO_MAX",
+    "MARGINAL_MIN_OVERLAP",
+    "COMPLEXITY_BUDGET",
     # regime-aware sizing (v0.3.0)
     "normalize_regime_context",
     "conviction_size_scale",

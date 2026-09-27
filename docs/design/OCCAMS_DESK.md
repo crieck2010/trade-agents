@@ -1,8 +1,10 @@
 # Occam's Desk — design spec
 
 **Status:** Phase 1 implemented in trade-agents v0.4.0 (2026-09-27);
-Phase 2 implemented in trade-agents v0.5.0 (2026-09-27). Phase 3
-specified below (§4), not yet implemented.
+Phase 2 implemented in trade-agents v0.5.0 (2026-09-27); Phase 3A
+implemented in trade-allocate v0.2.0 (2026-09-27) and Phase 3B in
+trade-agents v0.6.0 (2026-09-27). All three phases specified below
+(§1–§4) are now implemented.
 **Owner:** trade-agents. Sections touching trade-allocate are marked
 and reference its docs; nothing here duplicates them.
 
@@ -302,6 +304,19 @@ before `allocate`. `TradeIdea` gains
 `marginal_sharpe_contrib: float | None = None` and
 `max_book_correlation: float | None = None`.
 
+**Implementation (trade-agents v0.6.0, 2026-09-27):** `rank_marginal`
+is a PM stage (not `Desk.run`'s — the desk's `marginal_ranking`
+switch calls it after PM ranking, before advisor/allocate). The
+measurement goes through `trade_allocate.marginal_contribution`
+(v0.2.0) via a lazy bridge — `Desk`/`PM` stay stdlib-only; when
+trade-allocate is not installed the PM falls back to a stdlib
+equal-weight Δ/ρ measurement and records the fallback in the
+report's `"weighting"` field. No return histories are fabricated:
+without a `returns_provider` (or without `razor_oos_fn`-grade
+streams for a candidate) the candidate is rejected fail-closed.
+`DeskReport` carries `marginal_ranking` and `complexity_budget`
+dicts (admitted ideas, rejected-with-reasons, budget log).
+
 ---
 
 ## 5. Book-level complexity budget
@@ -322,6 +337,11 @@ before `allocate`. `TradeIdea` gains
   are recorded in the desk report.
 - Non-binding today (book ΣC = 3), binding as the book grows —
   which is the correct shape for a budget.
+- **Implementation (trade-agents v0.6.0, 2026-09-27):**
+  `PortfolioManagerAgent.enforce_complexity_budget` walks
+  Δ-descending admitted ideas against the pre-existing book;
+  each fit / swap / reject decision is recorded in the report's
+  `"log"`, and `Desk.complexity_budget` (default 40) is the knob.
 
 ---
 

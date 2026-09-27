@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-27
+
+### Added
+- **Occam's Desk phase 3** — marginal-diversification ranking + book
+  complexity budget (spec `docs/design/OCCAMS_DESK.md` §§4–5):
+  - `PortfolioManagerAgent.rank_marginal(ideas, book, returns_provider)`
+    admits PM-ranked ideas only when they are diversifying:
+    `Δᵢ = Sharpe(book ∪ candidate) − Sharpe(book) > 0.05` (ε = 0.05,
+    2.5× the Tier-1 per-unit complexity rent) and maximum Pearson book
+    correlation `ρ < 0.6`, on ≥ 126 overlapping daily-return days
+    (fail-closed below). Both portfolios use the allocator's own
+    correlation-aware risk-parity weighting via a lazy stdlib-only
+    bridge to `trade_allocate.marginal_contribution` (v0.2.0); when
+    trade-allocate is not installed the PM falls back to a stdlib
+    equal-weight measurement and records the fallback loudly in the
+    report's `weighting` field. Empty book bootstraps by Tier-1 PASS
+    then OOS Sharpe. Rejections are visible (idea + reasons), never
+    silently omitted. This pre-filter feeds — never replaces — the
+    Tier-2 diversification-ratio ≥ 1.10 gate.
+  - `TradeIdea` gains `marginal_sharpe_contrib: float | None = None`
+    (Δ) and `max_book_correlation: float | None = None` (maxρ),
+    stamped on admission, sorted Δ-descending.
+  - `PortfolioManagerAgent.enforce_complexity_budget` caps the
+    allocated book at ΣC ≤ 40 (default `COMPLEXITY_BUDGET`): a candidate
+    that would breach it swaps out the lowest-Δ admitted member (if
+    the newcomer beats it) or is rejected; every fit/swap/reject is
+    logged loudly. No return histories are fabricated — without a
+    `returns_provider` (or stream) a candidate is rejected fail-closed.
+  - `Desk(marginal_ranking=True, book=..., book_returns=...)` runs the
+    stage after PM ranking, before advisor/allocate; `default_desk`
+    accepts the same knobs. `DeskReport` gains `marginal_ranking` and
+    `complexity_budget` dicts (summary lines included).
+- 14 new tests in `tests/test_marginal_ranking.py` (real
+  `trade-allocate` bridge cousin rejection, empty-book bootstrap,
+  126-day fail-closed, measurement-failure rejection, missing-provider
+  rejection, equal-weight fallback, budget keep/swap/reject,
+  book-complexity counting, desk wiring, report fields).
+- README "The maths" (§§ marginal ranking, complexity budget),
+  spec §4.6/§5 implementation notes.
+
 ## [0.5.0] - 2026-09-27
 
 ### Added

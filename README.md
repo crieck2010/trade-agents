@@ -352,6 +352,27 @@ oversized. Every step is a closed-form formula, not a black box.
   the adopted sibling lands in `TradeIdea.simpler_sibling`. Ablations run
   on out-of-sample backtests only — the in-sample `metrics` are never
   trusted for the verdict.
+- *Marginal ranking* (`PortfolioManagerAgent.rank_marginal`, Occam's Desk
+  phase 3): with a non-empty allocated book, a candidate is admitted only
+  if it is diversifying — `Δᵢ = Sharpe(book ∪ candidate) − Sharpe(book) >
+  0.05` (ε = 2.5× the Tier-1 per-unit complexity rent, so admission must
+  pay for one more book member's complexity) and its maximum Pearson book
+  correlation `ρ < 0.6`, measured on ≥ 126 overlapping daily-return days
+  (fail-closed below). Both portfolios use the allocator's own
+  correlation-aware risk-parity weighting (`trade-allocate`
+  `marginal_contribution`, lazy stdlib-only bridge; a stdlib equal-weight
+  fallback is used — and recorded in the report's `weighting` field —
+  when trade-allocate isn't installed). The empty book bootstraps by
+  Tier-1 PASS then OOS Sharpe; every rejection is returned with its
+  reason, never silently omitted. Admitted ideas are stamped with
+  `marginal_sharpe_contrib` (Δ) and `max_book_correlation`, sorted by Δ.
+- *Complexity budget* (`PortfolioManagerAgent.enforce_complexity_budget`,
+  Occam's Desk phase 3): `ΣC ≤ 40` over the allocated book. A candidate
+  that would breach the budget first swaps out the lowest-Δ admitted
+  member (if the newcomer beats it) or is rejected; the desk switch is
+  `Desk(..., marginal_ranking=True, book=..., book_returns=...)` and the
+  `DeskReport` carries `marginal_ranking` and `complexity_budget` dicts
+  with the full admission log.
 
 **Honest limitations.**
 

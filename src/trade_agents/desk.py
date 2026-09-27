@@ -17,6 +17,13 @@ Optional stages (all off by default, all fail-soft):
   without it the stage records a skip note and ideas pass through
   unchanged.  An optional ``llm_razor_challenger`` proposes the removal
   order in one turn.
+- ``marginal_ranking``: Occam's Desk phase 3 — admit PM-ranked ideas by
+  marginal diversification value vs the allocated ``book`` (Δ Sharpe >
+  0.05, max book correlation < 0.6, ≥ 126 overlapping days), then cap
+  the book's total complexity at ``complexity_budget`` (default 40).
+  Needs ``book_returns(idea) -> return stream``; without it (and a
+  non-empty book) candidates are rejected fail-closed.  With an empty
+  book the first strategy is bootstrapped by Tier-1 PASS then score.
 - ``ledger_path``: record proposals, desk verdicts, and risk forecasts
   into a track-record JSONL ledger for the incentive system.
 - ``regime_context``: a trade-regime fused-context snapshot (see
@@ -57,6 +64,10 @@ class Desk:
         razor: bool = False,
         razor_oos_fn: Callable[[dict], dict] | None = None,
         llm_razor_challenger: Callable | None = None,
+        marginal_ranking: bool = False,
+        book: tuple | list = (),
+        book_returns: Callable[[object], dict | None] | None = None,
+        complexity_budget: int = 40,
         ledger_path: str | None = None,
         regime_context: dict | None = None,
         regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
@@ -74,6 +85,10 @@ class Desk:
         self.razor = razor
         self.razor_oos_fn = razor_oos_fn
         self.llm_razor_challenger = llm_razor_challenger
+        self.marginal_ranking = marginal_ranking
+        self.book = tuple(book)
+        self.book_returns = book_returns
+        self.complexity_budget = complexity_budget
         self.ledger_path = ledger_path
         self.regime_context = regime_context
         self.regime_max_age_seconds = regime_max_age_seconds
@@ -106,6 +121,7 @@ class Desk:
         self._record_ledger(briefs)
 
         ideas = self.pm.rank(briefs)
+        ideas, marginal_report, budget_report = self._run_marginal_ranking(ideas)
         advisor_notes = ""
         if self.advisor is not None and ideas:
             ideas, advisor_notes = self.pm.rerank_with_advisor(ideas, self.advisor)
@@ -149,6 +165,8 @@ class Desk:
             vetoes=tuple(vetoes),
             advisor_notes=advisor_notes,
             regime=dict(self.last_regime),
+            marginal_ranking=marginal_report,
+            complexity_budget=budget_report,
         )
 
     # -- optional stages ----------------------------------------------------
@@ -200,6 +218,18 @@ class Desk:
                             llm_razor_challenger=self.llm_razor_challenger)
                 for b in briefs]
 
+    def _run_marginal_ranking(self, ideas: list) -> tuple[list, dict, dict]:
+        # Occam's Desk phase 3: after PM ranking, before advisor/allocate.
+        # Off by default; fail-soft (empty reports, ideas untouched).
+        if not self.marginal_ranking:
+            return ideas, {}, {}
+        ranked = self.pm.rank_marginal(
+            ideas, book=self.book, returns_provider=self.book_returns)
+        budgeted = self.pm.enforce_complexity_budget(
+            ranked["admitted"], book=self.book,
+            budget=self.complexity_budget)
+        return budgeted["kept"], ranked, budgeted
+
     def _record_ledger(self, briefs: list[Brief]) -> None:
         if not self.ledger_path:
             return
@@ -250,6 +280,10 @@ def default_desk(
     razor: bool = False,
     razor_oos_fn: Callable[[dict], dict] | None = None,
     llm_razor_challenger: Callable | None = None,
+    marginal_ranking: bool = False,
+    book: tuple | list = (),
+    book_returns: Callable[[object], dict | None] | None = None,
+    complexity_budget: int = 40,
     ledger_path: str | None = None,
     regime_context: dict | None = None,
     regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
@@ -259,8 +293,10 @@ def default_desk(
 
     ``debate_rounds`` / ``overfit_gate`` / ``idea_returns`` /
     ``razor`` / ``razor_oos_fn`` / ``llm_razor_challenger`` /
-    ``ledger_path`` enable the debate protocol, the overfitting-desk
-    promotion gate, the razor round, and the track-record ledger;
+    ``marginal_ranking`` / ``book`` / ``book_returns`` /
+    ``complexity_budget`` / ``ledger_path`` enable the debate protocol,
+    the overfitting-desk promotion gate, the razor round, marginal
+    diversification ranking, and the track-record ledger;
     ``regime_context`` supplies the trade-regime fused context that
     scales order quantities; remaining kwargs go to the portfolio manager.
     """
@@ -275,6 +311,10 @@ def default_desk(
         razor=razor,
         razor_oos_fn=razor_oos_fn,
         llm_razor_challenger=llm_razor_challenger,
+        marginal_ranking=marginal_ranking,
+        book=book,
+        book_returns=book_returns,
+        complexity_budget=complexity_budget,
         ledger_path=ledger_path,
         regime_context=regime_context,
         regime_max_age_seconds=regime_max_age_seconds,

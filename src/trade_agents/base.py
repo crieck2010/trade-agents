@@ -72,6 +72,11 @@ class TradeIdea:
     # or survived every ablation. Otherwise {"chain": [...], "final_spec": {...},
     # "final_complexity": C}.
     simpler_sibling: dict | None = None
+    # Occam's Desk phase 3: marginal-diversification ranking. Stamped by
+    # PortfolioManagerAgent.rank_marginal; None until measured (or when the
+    # empty-book bootstrap applies, which ranks by standalone evidence).
+    marginal_sharpe_contrib: float | None = None
+    max_book_correlation: float | None = None
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:
@@ -165,6 +170,8 @@ class DeskReport:
     vetoes: tuple = ()
     advisor_notes: str = ""
     regime: dict = field(default_factory=dict)  # trade-regime context (v0.3.0)
+    marginal_ranking: dict = field(default_factory=dict)  # Occam's Desk §4 (v0.6.0)
+    complexity_budget: dict = field(default_factory=dict)  # Occam's Desk §4 (v0.6.0)
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:
@@ -176,6 +183,8 @@ class DeskReport:
             "vetoes": [v.to_dict() for v in self.vetoes],
             "advisor_notes": self.advisor_notes,
             "regime": dict(self.regime),
+            "marginal_ranking": dict(self.marginal_ranking),
+            "complexity_budget": dict(self.complexity_budget),
         }
 
     def to_json(self) -> str:
@@ -204,6 +213,20 @@ class DeskReport:
         lines.append(self._regime_line())
         if self.advisor_notes:
             lines.append(f"Advisor: {self.advisor_notes[:400]}")
+        mr = self.marginal_ranking or {}
+        if mr:
+            lines.append(
+                f"Marginal ranking ({mr.get('weighting', '?')}): "
+                f"{len(mr.get('admitted', []))} admitted, "
+                f"{len(mr.get('rejected', []))} rejected "
+                f"out of {mr.get('n_candidates', '?')} candidates")
+        cb = self.complexity_budget or {}
+        if cb:
+            lines.append(
+                f"Complexity budget: {cb.get('total_complexity', '?')}/"
+                f"{cb.get('budget', '?')} "
+                f"({len(cb.get('dropped', []))} dropped, "
+                f"{len(cb.get('rejected', []))} rejected on budget)")
         return "\n".join(lines)
 
     def _regime_line(self) -> str:
