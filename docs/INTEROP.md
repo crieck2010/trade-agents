@@ -127,6 +127,70 @@ run unchanged and remain final:
   `payload["regime"]` and `payload["chain"]["regime"]` for direct
   readers and the ledger-stored chain JSON.
 
+### Regime → sizing mapping (pinned contract, v0.8.0)
+
+Workstream C verified (2026-09-27) that regime output already reaches
+position sizing, so no new wiring was needed — this subsection pins the
+mapping that was found. The arbiter emits **graded conviction 0–100
+only**; there are no labeled regime states ("expansion"/"contraction"/
+"high-vol" labels are deliberately refused — buckets cut from noisy
+signals are false precision). The mapping is therefore a continuous
+linear scale, not a state table:
+
+| conviction | `exposure_scale` / `size_scale` | effect on order quantities |
+|---|---|---|
+| 100 | 1.00 | full size — quantities unscaled |
+| 75 | 0.75 | ×0.75 |
+| 50 | 0.50 | ×0.50 |
+| 25 | 0.25 | ×0.25 |
+| 0 | 0.00 | stand-down — every quantity is exactly 0 |
+
+Fallbacks (missing, stale >48h, malformed, unparseable timestamp):
+`conviction = 50.0`, `size_scale = 0.5`, `is_fallback = True` with
+`fallback_reason` in `{"missing", "stale", "invalid: <detail>"}` — never
+silent. A missing `exposure_scale_advisory` derives as
+`conviction / 100`; an advisory outside [0, 1] is discarded and
+re-derived the same way; `conviction_size_scale` clamps the final value
+to [0, 1].
+
+The maths and rationale:
+
+- **Linear, `conviction / 100`.** The arbiter's own docstring calls the
+  mapping "deliberately dumb": the arbiter *suggests* an exposure scale,
+  it does not decide risk posture. Curves, floors, and stand-down rules
+  live downstream, not in the regime engine.
+- **Hysteresis smooths the input, not the output.** Conviction is
+  hysteresis-smoothed (±10 pt deadband, ±20 pt confirm band, 3-observation
+  persistence, 25 pt max per assessment) *inside* trade-regime, so the
+  sizing multiplier never whipsaws on daily boundary noise — sizing
+  needs no additional smoothing.
+- **Sizing at the PM layer, never in idea scores.** `size_scale`
+  multiplies order quantities in `PM.size_orders`; allocation *weights*
+  are untouched. Idea scores are backtest evidence — scaling them by
+  regime would distort the evidence chain. The overfit-desk gate and the
+  risk-desk review run unchanged and remain final.
+- **trade-risk sizers are deliberately NOT regime-aware.** The
+  regime-scaled quantities arrive inside the order dict; `SizingContext`
+  carries only (equity, price, atr, volatility, win_prob, payoff) and
+  gains no regime field, so the engine can never double-scale. trade-risk
+  owns *final* sizing only in the sense of vetoes: the limit stack kills
+  bad orders regardless of conviction.
+- **Plain-data contract.** Everything crossing the boundary is a plain
+  dict (JSON-serializable, enforced by `json.dumps` on the snapshot and
+  by `DeskReport.to_json()`); no `trade_regime` import anywhere in
+  trade-agents (the lazy-bridge rule), and trade-risk never imports
+  trade-agents.
+
+Contract ownership: **trade-regime** owns the snapshot schema
+(`source`, `schema_version`, `conviction`, `exposure_scale_advisory`,
+hysteresis fields); **trade-agents** owns normalization
+(`regime.normalize_regime_context`, never raises) and the PM sizing
+hook; **trade-risk** owns final gating (limits) and its engine-internal
+sizing inputs. Pinned by `tests/test_regime_sizing_mapping.py`:
+synthetic snapshots sweep the whole graded scale (0/25/50/75/100) and
+assert each point's multiplier end-to-end, plus the explicit-fallback
+rows.
+
 ## Adding a researcher
 
 1. Subclass `Agent` in `src/trade_agents/scouts.py` (or a new module

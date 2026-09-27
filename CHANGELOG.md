@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-27
+
+### Added
+- **Regime → sizing contract pinned** (workstream C): investigation
+  confirmed the regime arbiter's output already reaches position sizing —
+  no new wiring was needed, so this release documents and proves the
+  found mapping rather than changing behavior:
+  - `docs/INTEROP.md` gains a "Regime → sizing mapping (pinned contract)"
+    subsection: the graded-conviction → multiplier table (100→×1.00,
+    75→×0.75, 50→×0.50, 25→×0.25, 0→×0.00 stand-down; explicit neutral
+    fallback ×0.50 for missing/stale/malformed snapshots), the maths and
+    rationale (linear `conviction/100` by arbiter design, hysteresis
+    smoothing lives in trade-regime so sizing never whipsaws, sizing at
+    the PM layer keeps idea scores as undistorted backtest evidence,
+    trade-risk's sizers deliberately consume no regime input so the
+    engine can never double-scale), and contract ownership
+    (trade-regime owns the snapshot schema; trade-agents owns
+    normalization and the PM sizing hook; trade-risk owns final
+    gating/veto). Notes that the arbiter emits no labeled states — the
+    mapping is a continuous scale, not a state table.
+  - `tests/test_regime_sizing_mapping.py` (17 tests): synthetic regime
+    snapshots sweep the whole graded scale at both unit level
+    (`conviction_size_scale` on normalized snapshots, advisory-present /
+    advisory-derived / out-of-range-advisory / fallback rows) and
+    desk end-to-end (`Desk.run` at convictions 100/75/50/25/0 asserts
+    quantities scale in exact mapping-table proportions, weights
+    untouched, conviction 0 yields zero quantities).
+
 ## [0.7.0] - 2026-09-27
 
 ### Added
