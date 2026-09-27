@@ -4,6 +4,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-27
+
+### Added
+- **Occam's Desk phase 1** — complexity scoring + complexity-adjusted
+  research bar (`src/trade_agents/complexity.py`, spec
+  `docs/design/OCCAMS_DESK.md` §1–§2):
+  - `complexity_of(strategy_name, params, hints) -> (C, breakdown)`
+    implements the counting rules: `C = n_indicators +
+    n_free_params + n_regime_branches + n_filters`. Indicator =
+    one signal-transform family (`sma_crossover` = 1, not 2);
+    free param = grid-searched / optimized / hand-tuned value
+    (fixed constants never count; frozen-spec `declared_unsearched`
+    design constants don't either); regime branches count extra
+    branches (`max(0, branches − 1)`); filters count 1 each. Pure
+    function, plain-data in/out, stdlib only.
+  - `required_score(base_bar, C) = base_bar + λ·C` with the blessed
+    `λ = 0.05` score units (≈ 0.06 OOS Sharpe per complexity unit —
+    gentle end of the AIC/BIC-style 0.05–0.10 band). Each scout's
+    `min_score` is now the base bar; the bar rises with complexity.
+    With base 0.30: C=3 → 0.45, C=4 → 0.50.
+  - `TradeIdea` gains `complexity: int` and `complexity_breakdown:
+    dict` (defaulted — frozen-dataclass backwards-compatible).
+    Backtesting scouts stamp every emitted idea; `sentiment_scout`
+    stamps C=1 (pop-score indicator, no tuned params — its
+    conviction-based filter is unchanged).
+  - `make_idea()` accepts the new fields; `Brief.to_prompt()` shows
+    `C=` per idea; new exports `complexity_of`, `required_score`,
+    `COMPLEXITY_RENT_LAMBDA`, `STRATEGY_INDICATORS`,
+    `BREAKDOWN_KEYS`.
+- **28 new tests** (`tests/test_complexity.py`): spec worked examples
+  (`sma_crossover` → 3, `bollinger_squeeze_breakout` → 4, hypothetical
+  composite → 12), free-vs-fixed/declared-unsearched distinction,
+  unknown-strategy fail-soft note, bar monotonicity and exact-boundary
+  behavior, scout integration (rejection at the new threshold,
+  discrimination of C=3 vs C=4 at the same score), the §7a **round-3
+  replay** (adjusted bar retains exactly 6 of 15, rejects 9; razor
+  trigger C ≥ 6 fires on none), and the §7b **REGCOND-1 sanity**
+  (frozen spec → C=3 < 6; `tier1_evidence.json` verdict stays PASS —
+  phase 1 is purely additive and invalidates nothing retroactively).
+- **Docs:** "The maths" gains the complexity + adjusted-bar
+  derivation; `docs/RESEARCHERS.md` research-bars table updated.
+
+### Notes
+- Applies to future screenings only (§9 grandfathering): round-3 and
+  earlier records stand as committed; pre-registrations freeze the
+  rule set in force at registration time.
+- Phase 2 (razor round) and phase 3 (marginal-diversification ranking)
+  are specified but not built here.
+
 ## [0.3.0] - 2026-09-26
 
 ### Added

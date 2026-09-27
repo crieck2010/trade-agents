@@ -29,6 +29,13 @@ from .base import (
     TradeIdea,
     Veto,
 )
+from .complexity import (
+    BREAKDOWN_KEYS,
+    COMPLEXITY_RENT_LAMBDA,
+    STRATEGY_INDICATORS,
+    complexity_of,
+    required_score,
+)
 from .debate import (
     debate_brief,
     debate_idea,
@@ -57,7 +64,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -69,6 +76,12 @@ __all__ = [
     "Veto",
     "Desk",
     "default_desk",
+    # Occam's Desk phase 1: complexity scoring + adjusted bar (v0.4.0)
+    "complexity_of",
+    "required_score",
+    "COMPLEXITY_RENT_LAMBDA",
+    "STRATEGY_INDICATORS",
+    "BREAKDOWN_KEYS",
     # regime-aware sizing (v0.3.0)
     "normalize_regime_context",
     "conviction_size_scale",

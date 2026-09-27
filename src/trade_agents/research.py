@@ -78,6 +78,8 @@ def make_idea(
     score: float,
     conviction: float,
     thesis: str = "",
+    complexity: int = 0,
+    complexity_breakdown: dict | None = None,
 ) -> "TradeIdea":
     from .base import TradeIdea
 
@@ -92,4 +94,6 @@ def make_idea(
         score=score,
         conviction=conviction,
         thesis=thesis,
+        complexity=int(complexity),
+        complexity_breakdown=dict(complexity_breakdown or {}),
     )

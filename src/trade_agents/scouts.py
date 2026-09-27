@@ -13,6 +13,11 @@ from __future__ import annotations
 from datetime import timezone
 
 from .base import Agent, BarsProvider, Brief, TradeIdea
+from .complexity import (
+    COMPLEXITY_RENT_LAMBDA,
+    complexity_of,
+    required_score,
+)
 from .research import (
     backtest_candidate,
     conviction_from_score,
@@ -52,12 +57,19 @@ class ResearchAgent(Agent):
                     except Exception:
                         continue  # one bad combo must not kill the sweep
                     score = score_result(metrics)
-                    if score >= self.min_score:
+                    # Occam's Desk phase 1 (spec §2): the research bar
+                    # rises with complexity — each parameter must earn
+                    # its keep. min_score is the base_bar; λ·C is the rent.
+                    complexity, breakdown = complexity_of(strategy_name, params)
+                    bar = required_score(self.min_score, complexity)
+                    if score >= bar:
                         ideas.append(
                             make_idea(
                                 self.name, symbol, strategy_name, params,
                                 metrics, score, conviction_from_score(score),
                                 self.thesis_for(symbol, strategy_name, params),
+                                complexity=complexity,
+                                complexity_breakdown=breakdown,
                             )
                         )
         ideas.sort(key=lambda i: i.score, reverse=True)
@@ -65,7 +77,15 @@ class ResearchAgent(Agent):
             agent=self.name,
             niche=self.niche,
             ideas=tuple(ideas[: self.top_n]),
-            notes={"scanned": scanned, "universe": list(self.universe)},
+            notes={
+                "scanned": scanned,
+                "universe": list(self.universe),
+                "research_bar": (
+                    f"required_score = min_score + λ·C "
+                    f"(min_score={self.min_score}, "
+                    f"λ={COMPLEXITY_RENT_LAMBDA})"
+                ),
+            },
         )
 
 
@@ -249,6 +269,16 @@ class SentimentScout(Agent):
             )
 
         ideas: list[TradeIdea] = []
+        # Occam's Desk phase 1: stamp complexity on every idea. The pop
+        # score is one indicator family with no tuned strategy params
+        # (spec §1.3 → C=1); scan-config keys like window_hours are not
+        # strategy params, so they are not counted. The sentiment bar
+        # stays conviction-based — the score-unit adjusted bar of §2
+        # applies to the backtesting scouts.
+        sent_c, sent_breakdown = complexity_of(
+            self.strategy_name, {},
+            hints={"notes": "sentiment pop; scan-config params not counted"},
+        )
         for d in to_agent_ideas(pops):
             if d["conviction_10"] < self.min_conviction:
                 continue
@@ -269,6 +299,8 @@ class SentimentScout(Agent):
                 score=d["score"],
                 conviction=d["conviction_10"] / 10.0,
                 thesis=d["thesis"],
+                complexity=sent_c,
+                complexity_breakdown=dict(sent_breakdown),
             ))
         ideas.sort(key=lambda i: i.score, reverse=True)
         return Brief(

@@ -254,7 +254,7 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.3.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.4.0**.
 
 ## The maths
 
@@ -316,6 +316,27 @@ oversized. Every step is a closed-form formula, not a black box.
   Weights are untouched; only quantities shrink. Sizing enters *after*
   allocation, so idea scores (backtest evidence) are never distorted by
   regime, and the overfit gate + risk veto still see the full idea.
+- *Complexity* (`complexity.complexity_of`, Occam's Desk phase 1):
+  `C = n_indicators + n_free_params + n_regime_branches + n_filters`.
+  An indicator is one signal-transform *family* (`sma_crossover` = 1,
+  not 2); a free parameter is any value grid-searched, optimized, or
+  hand-tuned (fixed constants never count; declared-unsearched design
+  constants don't either); regime branches count *extra* branches
+  (`max(0, branches − 1)`); filters count 1 each. Canonical simple
+  system ("one indicator, two parameters"): C = 3.
+- *Complexity-adjusted research bar* (`complexity.required_score`):
+  `required_score(C) = base_bar + λ·C` with `λ = 0.05` score units.
+  Why 0.05: `score_result = sharpe × trade_factor − 1.5 × max_drawdown`,
+  and in the round-3 retained population (all ≥ 10 trades, so
+  `trade_factor` = 1) score/sharpe runs 0.80–0.93 (mean ≈ 0.86) —
+  hence λ ≈ 0.05/0.86 ≈ **0.058 ≈ 0.06 OOS Sharpe per complexity
+  unit**, inside the AIC/BIC-style 0.05–0.10 band, at the gentle end.
+  The gentle end is deliberate: the score already punishes drawdown
+  1.5×, and the razor round (phase 2) does the hard simplification
+  later. With base 0.30: C = 3 → bar 0.45, C = 4 → bar 0.50.
+  Replay against round 3 retains exactly 6 of 15 ideas and rejects 9
+  (the thin-evidence tail the debate had already flagged); no Tier-1
+  outcome changes.
 
 **Honest limitations.**
 

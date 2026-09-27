@@ -10,14 +10,15 @@ grid, evidence = backtest metrics); the seventh is a signal scout
 - **Strategies:** `sma_crossover` {10/30, 20/50}, `donchian_breakout`
   {20/10, 55/20}, `supertrend` {atr 10, mult 3.0}
 - **Method:** backtests every (symbol × strategy × params) combo,
-  keeps score ≥ 0.30.
+  keeps score ≥ the complexity-adjusted bar (`min_score + λ·C`).
 
 ## equity_mean_reversion_scout
 - **Niche:** US equities × short-term mean reversion
 - **Universe:** SPY, AAPL, MSFT, JPM, XOM
 - **Strategies:** `rsi2_mean_reversion`, `bollinger_reversion`,
   `zscore_reversion`
-- **Method:** fades overbought/oversold extremes; same 0.30 bar.
+- **Method:** fades overbought/oversold extremes; same
+  complexity-adjusted bar.
 
 ## crypto_momentum_scout
 - **Niche:** crypto × time-series momentum
@@ -64,8 +65,14 @@ grid, evidence = backtest metrics); the seventh is a signal scout
 
 | Researcher | Bar |
 |---|---|
-| Backtesting scouts | composite score ≥ `min_score` (default 0.30), where score = `sharpe × evidence_factor − 1.5 × max_drawdown` |
-| `sentiment_scout` | `conviction_10 ≥ min_conviction` (default 5.0) |
+| Backtesting scouts | composite score ≥ `required_score(C) = min_score + λ·C` (default `min_score` 0.30, λ = 0.05; e.g. C=3 → 0.45, C=4 → 0.50), where score = `sharpe × evidence_factor − 1.5 × max_drawdown` and C is the idea's complexity (`complexity.complexity_of`) |
+| `sentiment_scout` | `conviction_10 ≥ min_conviction` (default 5.0); ideas stamped with complexity C=1 (pop-score indicator, no tuned params) — the score-unit adjusted bar does not apply to its conviction-based filter |
+
+Complexity pays rent: every indicator family, tuned parameter, extra
+regime branch, or filter raises the bar by 0.05 score units
+(≈ 0.06 OOS Sharpe). See `docs/design/OCCAMS_DESK.md` §1–§2 and
+"The maths" in the README. Applies to future screenings only —
+prior rounds' records stand as committed (§9 grandfathering).
 
 ## Configuring a researcher
 

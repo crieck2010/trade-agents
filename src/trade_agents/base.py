@@ -62,6 +62,11 @@ class TradeIdea:
     conviction: float  # 0..1
     thesis: str = ""
     debate: dict = field(default_factory=dict)  # debate.py transcript + synthesis
+    # Occam's Desk phase 1 (spec §1.4 / §6): complexity score and its
+    # breakdown. Defaults keep the frozen dataclass backwards-compatible;
+    # scouts stamp every idea they emit via complexity.complexity_of.
+    complexity: int = 0
+    complexity_breakdown: dict = field(default_factory=dict)
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:
@@ -102,6 +107,7 @@ class Brief:
             )
             lines.append(
                 f"score={idea.score:.2f} conviction={idea.conviction:.2f} "
+                f"C={idea.complexity} "
                 f"sharpe={m.get('sharpe_ratio', 0):.2f} "
                 f"max_dd={m.get('max_drawdown', 0):.1%} "
                 f"return={m.get('total_return', 0):+.1%} "
