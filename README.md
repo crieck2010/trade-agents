@@ -60,6 +60,7 @@ print(report.summary())
 | `sentiment_scout` | Social/news sentiment pops → directional ideas (trade-sentiment) |
 | `portfolio_manager` | Ranks ideas, inverse-vol allocation, regime tilt, order sizing |
 | `risk_manager` | Pre-trade veto via `trade-risk` limits (cumulative fills) |
+| `data_auditor` | Pre-research data-feed auditing: survivorship, corporate actions, stale prints, coverage gaps |
 
 Each backtesting researcher backtests its (universe × strategies × params) grid
 through the sibling engines, scores every candidate
@@ -229,6 +230,7 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 ## Documentation
 
 - `docs/ARCHITECTURE.md` — desk pipeline, agent roles, failure semantics
+- `docs/DATA_AUDIT.md` — data-auditor role: detection thresholds ("the maths"), advisory-vs-blocking rationale
 - `docs/METHODOLOGY.md` — debate math, incentive formulas, why rule-based
 - `docs/RESEARCHERS.md` — all seven researchers: niches, universes, bars
 - `docs/INTEROP.md` — sibling integrations and how to add a researcher
@@ -254,7 +256,7 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.4.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.7.0**.
 
 ## The maths
 
@@ -373,6 +375,21 @@ oversized. Every step is a closed-form formula, not a black box.
   `Desk(..., marginal_ranking=True, book=..., book_returns=...)` and the
   `DeskReport` carries `marginal_ranking` and `complexity_budget` dicts
   with the full admission log.
+- *Data audit* (`DataAuditorAgent.audit`, v0.7.0): four check classes run
+  before research. Survivorship — `first_tradable <=` first bar date and
+  `last_tradable >=` last bar date, zero tolerance, against
+  point-in-time membership metadata (absent metadata → "unverifiable",
+  never blocking). Corporate actions — a session with `|r| > 25%` whose
+  price ratio `close[t-1]/close[t]` is within 0.5% of a standard split
+  ratio (2, 3, 4, 5, 10, 3:2 and reverse splits) is an unadjusted
+  split discontinuity (recorded actions don't clear the signature).
+  Stale prints — ≥ 5 consecutive identical closes with zero volume, or
+  ≥ 10 regardless of volume. Coverage gaps — more than 5 missing weekday
+  sessions, or a single run of more than 3 consecutive missing expected
+  sessions (a 4-weekday outage is the September-2001-scale reference
+  event). Confirmed violations quarantine the symbol (stripped from the
+  researchers' provider, reasons recorded loudly); the report lands on
+  `DeskReport.data_audit`.
 
 **Honest limitations.**
 

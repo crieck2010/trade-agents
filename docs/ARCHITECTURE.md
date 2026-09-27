@@ -20,7 +20,8 @@ src/trade_agents/
     track_record.py       # JSONL ledger, researcher/risk/PM scores, debate weights
     portfolio_manager.py  # PortfolioManagerAgent: rank → allocate → size
     risk_agent.py         # RiskManagerAgent: pre-trade veto via trade-risk
-    desk.py               # Desk: research → debate → overfit gate → PM → risk
+    data_audit.py         # DataAuditorAgent: pre-research data-feed auditing
+    desk.py               # Desk: data audit → research → debate → overfit gate → PM → risk
     registry.py           # list_agents / get_agent / describe_agents
     adapters.py           # lazy bridges to sibling engines
     cli.py                # debate / leaderboard / license / update-check commands
@@ -30,6 +31,11 @@ src/trade_agents/
 ## Data flow
 
 ```
+provider ──▶ data-auditor (survivorship / corporate actions / stale prints /
+               coverage gaps; confirmed violations quarantine the symbol,
+               missing evidence is "unverifiable" — fail-soft)
+               │ quarantined symbols stripped (AuditedBarsProvider)
+               ▼
 researchers (parallel) ──Brief(TradeIdea[])──▶ debate (bull vs bear, rounds)
                                                         │ transcript + synthesis
                                                         ▼ conviction updated
@@ -51,7 +57,16 @@ researchers (parallel) ──Brief(TradeIdea[])──▶ debate (bull vs bear, r
                                                       risk forecasts (incentive loop)
 ```
 
-1. **Research** — `Desk._run_research` fans the researchers out in a
+1. **Data audit** — `Desk._run_data_audit` runs `DataAuditorAgent.audit`
+   on every symbol's bar feed *before* research (see
+   `docs/DATA_AUDIT.md`). Symbols with a confirmed violation are
+   quarantined: the researchers receive an `AuditedBarsProvider` that
+   reports zero bars for them, so bad data never reaches research, and
+   every quarantine is recorded loudly with reasons on
+   `DeskReport.data_audit` (plus a `summary()` line). Checks whose
+   evidence is missing report `"unverifiable"` and quarantine nothing.
+   `data_audit=False` disables the stage.
+2. **Research** — `Desk._run_research` fans the researchers out in a
    thread pool. Each returns a `Brief`: its ideas plus machine-readable
    `notes`. One researcher's failure never affects another's.
 2. **Debate** — when `debate_rounds > 0`, `debate_brief` runs the
@@ -100,6 +115,10 @@ their metrics mean (see `docs/RESEARCHERS.md`).
 
 ## Failure semantics (the desk never crashes on research)
 
+- Data audit: a confirmed data failure quarantines the symbol (loud,
+  with reasons); missing evidence (no membership metadata, no
+  timestamps, no volume field) is reported `"unverifiable"` and blocks
+  nothing — fail-soft on missing evidence, fail-closed on bad evidence.
 - Missing sibling package → researcher returns an empty brief with an
   install hint in `notes["error"]`.
 - One bad backtest combo → skipped; the sweep continues.

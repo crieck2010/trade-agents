@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-27
+
+### Added
+- **Data-auditor role** — `DataAuditorAgent` (`data_auditor`, registered in
+  `registry.py`, `src/trade_agents/data_audit.py`), the desk's pre-research
+  data-quality role, wired into `Desk.run` *before* the scouts
+  (`data_audit=True` by default; `audit_membership`,
+  `audit_corporate_actions`, `audit_calendars` metadata knobs;
+  `default_desk` accepts the same). Four check classes with explicit,
+  documented detection thresholds (full maths in `docs/DATA_AUDIT.md`):
+  - survivorship-bias screening — universe membership vs point-in-time
+    availability, zero-tolerance date comparison against
+    `first_tradable`/`last_tradable` metadata;
+  - corporate-action discontinuities — a session with `|return| > 25%`
+    whose price ratio is within 0.5% of a standard split ratio
+    (2/3/4/5/10, 3:2, and reverse splits) is an unadjusted split;
+    recorded actions near a jump don't clear the signature;
+  - stale prints — ≥ 5 consecutive identical closes with zero volume,
+    or ≥ 10 regardless of volume;
+  - coverage gaps — > 5 missing expected sessions, or a single run of
+    > 3 consecutive missing expected sessions.
+  - **Advisory vs blocking (design decision):** fail-soft on missing
+    evidence (a check that can't run reports `"unverifiable"` and
+    quarantines nothing), fail-closed on bad evidence (a confirmed
+    violation quarantines the symbol — stripped from the researchers'
+    provider via `AuditedBarsProvider` — with reasons recorded loudly).
+    This follows the repo's refusal philosophy: the overfit gate kills
+    ideas only when a returns series exists to judge, and the risk
+    manager vetoes loudly with recorded reasons; the auditor applies the
+    same rule upstream, per-symbol, so the desk never crashes on
+    research. Rationale documented in `docs/DATA_AUDIT.md`.
+  - `DeskReport` gains a `data_audit` dict (JSON-serializable audit
+    report; `summary()` prints audit + quarantine lines).
+- 25 new tests in `tests/test_data_audit.py`: synthetic fixtures with a
+  planted issue per check class (split, unexplained jump, zero-volume
+  and volumed stale runs, coverage gap, survivorship/delisting) assert
+  detection; clean data passes; unverifiable checks don't quarantine;
+  desk wiring (quarantine before research, disabled mode, audit knobs).
+- README "The maths" + agents table, `docs/ARCHITECTURE.md` pipeline
+  (step 0) and failure semantics.
+
 ## [0.6.0] - 2026-09-27
 
 ### Added

@@ -29,6 +29,18 @@ from .base import (
     TradeIdea,
     Veto,
 )
+from .data_audit import (
+    CHECK_NAMES,
+    CORP_ACTION_JUMP_RETURN,
+    GAP_CONSECUTIVE_TOLERANCE,
+    GAP_TOTAL_TOLERANCE,
+    SPLIT_RATIO_TOL,
+    SPLIT_RATIOS,
+    STALE_RUN_ANY_VOLUME,
+    STALE_RUN_ZERO_VOLUME,
+    AuditedBarsProvider,
+    DataAuditorAgent,
+)
 from .complexity import (
     BREAKDOWN_KEYS,
     COMPLEXITY_RENT_LAMBDA,
@@ -85,7 +97,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -97,6 +109,17 @@ __all__ = [
     "Veto",
     "Desk",
     "default_desk",
+    # data-auditor role (v0.7.0)
+    "DataAuditorAgent",
+    "AuditedBarsProvider",
+    "CHECK_NAMES",
+    "CORP_ACTION_JUMP_RETURN",
+    "SPLIT_RATIO_TOL",
+    "SPLIT_RATIOS",
+    "STALE_RUN_ZERO_VOLUME",
+    "STALE_RUN_ANY_VOLUME",
+    "GAP_TOTAL_TOLERANCE",
+    "GAP_CONSECUTIVE_TOLERANCE",
     # Occam's Desk phase 1: complexity scoring + adjusted bar (v0.4.0)
     "complexity_of",
     "required_score",

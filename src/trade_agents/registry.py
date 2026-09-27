@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from .base import Agent
+from .data_audit import DataAuditorAgent
 from .portfolio_manager import PortfolioManagerAgent
 from .risk_agent import RiskManagerAgent
 from .scouts import SCOUT_CLASSES
 
 AGENT_REGISTRY: dict[str, type[Agent]] = {cls.name: cls for cls in SCOUT_CLASSES}
+AGENT_REGISTRY[DataAuditorAgent.name] = DataAuditorAgent
 AGENT_REGISTRY[PortfolioManagerAgent.name] = PortfolioManagerAgent
 AGENT_REGISTRY[RiskManagerAgent.name] = RiskManagerAgent
 

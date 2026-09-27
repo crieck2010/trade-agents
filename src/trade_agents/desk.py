@@ -1,8 +1,16 @@
-"""The desk: researchers -> debate -> overfit gate -> razor -> PM -> risk manager.
+"""The desk: data audit -> researchers -> debate -> overfit gate -> razor -> PM -> risk manager.
 
 ``Desk.run`` executes one research cycle and returns a
 :class:`DeskReport`.  Researchers are independent, so ``parallel=True``
 runs their sweeps in a thread pool (stdlib ``concurrent.futures``).
+
+``data_audit`` (on by default) runs first: the data-auditor checks every
+symbol's bar feed for survivorship bias, corporate-action
+discontinuities, stale prints, and coverage gaps.  Symbols with a
+confirmed violation are quarantined (stripped from the provider the
+scouts see, with reasons recorded loudly); checks whose evidence is
+missing report ``"unverifiable"`` and quarantine nothing — the desk
+fails soft on missing evidence, closed on bad evidence.
 
 Optional stages (all off by default, all fail-soft):
 
@@ -71,6 +79,11 @@ class Desk:
         ledger_path: str | None = None,
         regime_context: dict | None = None,
         regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
+        data_audit: bool = True,
+        auditor=None,
+        audit_membership: dict | None = None,
+        audit_corporate_actions: dict | None = None,
+        audit_calendars: dict | None = None,
     ) -> None:
         self.researchers = (
             researchers if researchers is not None
@@ -93,6 +106,12 @@ class Desk:
         self.regime_context = regime_context
         self.regime_max_age_seconds = regime_max_age_seconds
         self.last_regime: dict = {}  # normalized snapshot of the most recent run
+        self.data_audit = data_audit
+        self.auditor = auditor
+        self.audit_membership = audit_membership
+        self.audit_corporate_actions = audit_corporate_actions
+        self.audit_calendars = audit_calendars
+        self.last_audit: dict = {}  # audit report of the most recent run
 
     def run(
         self,
@@ -113,6 +132,10 @@ class Desk:
             max_age_seconds=self.regime_max_age_seconds,
         )
         size_scale = conviction_size_scale(self.last_regime)
+
+        # Data audit runs before research: quarantined symbols never reach
+        # the scouts.
+        provider = self._run_data_audit(provider)
 
         briefs = self._run_research(provider, strategy_factory, backtest_fn, parallel)
         briefs = self._run_debate(briefs)
@@ -167,7 +190,30 @@ class Desk:
             regime=dict(self.last_regime),
             marginal_ranking=marginal_report,
             complexity_budget=budget_report,
+            data_audit=dict(self.last_audit),
         )
+
+    # -- data audit (runs before research) ---------------------------------
+    def _run_data_audit(self, provider):
+        from .data_audit import AuditedBarsProvider, DataAuditorAgent
+
+        if not self.data_audit:
+            self.last_audit = {"agent": "data_auditor", "audit": "disabled"}
+            return provider
+        auditor = self.auditor or DataAuditorAgent()
+        universe = list(provider.symbols()) or sorted(
+            {s for r in self.researchers for s in getattr(r, "universe", ())})
+        self.last_audit = auditor.audit(
+            provider,
+            universe=universe,
+            membership=self.audit_membership,
+            corporate_actions=self.audit_corporate_actions,
+            calendars=self.audit_calendars,
+        )
+        quarantined = [q["symbol"] for q in self.last_audit["quarantined"]]
+        if quarantined:
+            return AuditedBarsProvider(provider, quarantined)
+        return provider
 
     # -- optional stages ----------------------------------------------------
     def _debate_weights(self) -> dict[str, float] | None:
@@ -287,6 +333,11 @@ def default_desk(
     ledger_path: str | None = None,
     regime_context: dict | None = None,
     regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
+    data_audit: bool = True,
+    auditor=None,
+    audit_membership: dict | None = None,
+    audit_corporate_actions: dict | None = None,
+    audit_calendars: dict | None = None,
     **pm_kwargs,
 ) -> Desk:
     """The standard desk: all seven scouts + PM + risk manager.
@@ -298,7 +349,11 @@ def default_desk(
     the overfitting-desk promotion gate, the razor round, marginal
     diversification ranking, and the track-record ledger;
     ``regime_context`` supplies the trade-regime fused context that
-    scales order quantities; remaining kwargs go to the portfolio manager.
+    scales order quantities; ``data_audit`` (default True) runs the
+    data-auditor before research with optional point-in-time
+    ``audit_membership``, ``audit_corporate_actions``, and
+    ``audit_calendars`` metadata; remaining kwargs go to the portfolio
+    manager.
     """
     return Desk(
         researchers=[cls() for cls in SCOUT_CLASSES],
@@ -318,4 +373,9 @@ def default_desk(
         ledger_path=ledger_path,
         regime_context=regime_context,
         regime_max_age_seconds=regime_max_age_seconds,
+        data_audit=data_audit,
+        auditor=auditor,
+        audit_membership=audit_membership,
+        audit_corporate_actions=audit_corporate_actions,
+        audit_calendars=audit_calendars,
     )

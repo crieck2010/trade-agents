@@ -172,6 +172,7 @@ class DeskReport:
     regime: dict = field(default_factory=dict)  # trade-regime context (v0.3.0)
     marginal_ranking: dict = field(default_factory=dict)  # Occam's Desk §4 (v0.6.0)
     complexity_budget: dict = field(default_factory=dict)  # Occam's Desk §4 (v0.6.0)
+    data_audit: dict = field(default_factory=dict)  # data-auditor report (v0.7.0)
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:
@@ -185,6 +186,7 @@ class DeskReport:
             "regime": dict(self.regime),
             "marginal_ranking": dict(self.marginal_ranking),
             "complexity_budget": dict(self.complexity_budget),
+            "data_audit": dict(self.data_audit),
         }
 
     def to_json(self) -> str:
@@ -213,6 +215,14 @@ class DeskReport:
         lines.append(self._regime_line())
         if self.advisor_notes:
             lines.append(f"Advisor: {self.advisor_notes[:400]}")
+        da = self.data_audit or {}
+        if da and da.get("agent") == "data_auditor":
+            lines.append(
+                f"Data audit: {len(da.get('universe', []))} symbols audited, "
+                f"{da.get('n_quarantined', 0)} quarantined")
+            for q in da.get("quarantined", []):
+                lines.append(f"  QUARANTINE {q['symbol']}: {q['reasons'][0]}"
+                             if q.get("reasons") else f"  QUARANTINE {q['symbol']}")
         mr = self.marginal_ranking or {}
         if mr:
             lines.append(
