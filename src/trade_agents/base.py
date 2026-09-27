@@ -67,6 +67,11 @@ class TradeIdea:
     # scouts stamp every idea they emit via complexity.complexity_of.
     complexity: int = 0
     complexity_breakdown: dict = field(default_factory=dict)
+    # Occam's Desk phase 2: the adopted simpler sibling (razor round).
+    # None when the idea was never razored, failed to trigger (C < 6),
+    # or survived every ablation. Otherwise {"chain": [...], "final_spec": {...},
+    # "final_complexity": C}.
+    simpler_sibling: dict | None = None
     as_of: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> dict:

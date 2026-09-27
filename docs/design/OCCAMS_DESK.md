@@ -1,7 +1,8 @@
 # Occam's Desk — design spec
 
-**Status:** SPEC ONLY (2026-09-27). Not implemented. The next build
-implements from this document; no version bump ships with the spec.
+**Status:** Phase 1 implemented in trade-agents v0.4.0 (2026-09-27);
+Phase 2 implemented in trade-agents v0.5.0 (2026-09-27). Phase 3
+specified below (§4), not yet implemented.
 **Owner:** trade-agents. Sections touching trade-allocate are marked
 and reference its docs; nothing here duplicates them.
 

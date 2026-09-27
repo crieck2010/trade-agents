@@ -51,6 +51,20 @@ from .regime import (
     conviction_size_scale,
     normalize_regime_context,
 )
+from .razor import (
+    RAZOR_DSR_BAR,
+    RAZOR_FLOOR_C,
+    RAZOR_MAX_DD,
+    RAZOR_MAX_PASSES,
+    RAZOR_SURVIVAL_DELTA,
+    RAZOR_TRIGGER_C,
+    apply_removal,
+    attach_razor,
+    enumerate_removals,
+    propose_removal_order,
+    razor_brief,
+    razor_idea,
+)
 from .track_record import (
     AgentLedger,
     debate_weights,
@@ -64,7 +78,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -82,6 +96,19 @@ __all__ = [
     "COMPLEXITY_RENT_LAMBDA",
     "STRATEGY_INDICATORS",
     "BREAKDOWN_KEYS",
+    # Occam's Desk phase 2: the razor round (v0.5.0)
+    "RAZOR_TRIGGER_C",
+    "RAZOR_SURVIVAL_DELTA",
+    "RAZOR_FLOOR_C",
+    "RAZOR_MAX_PASSES",
+    "RAZOR_MAX_DD",
+    "RAZOR_DSR_BAR",
+    "enumerate_removals",
+    "propose_removal_order",
+    "apply_removal",
+    "razor_idea",
+    "razor_brief",
+    "attach_razor",
     # regime-aware sizing (v0.3.0)
     "normalize_regime_context",
     "conviction_size_scale",

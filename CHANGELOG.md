@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-27
+
+### Added
+- **Occam's Desk phase 2** — the razor round (`src/trade_agents/razor.py`,
+  spec `docs/design/OCCAMS_DESK.md` §3):
+  - `razor_idea(idea, oos_fn, ...)` runs the ablation round on one idea
+    dict: ideas with C ≥ 6 face scripted one-step removals (indicators →
+    free params → regime branches → filters); each sibling is backtested
+    out-of-sample by the injected `oos_fn(spec)` under identical data,
+    cost model, and walk-forward geometry. The complex version survives
+    only when `Sharpe_complex − Sharpe_simple > 0.15` (δ = 2.5× the
+    per-unit complexity rent, half the Tier-1 bar); otherwise the simpler
+    sibling is adopted, C recomputed, and the round recurses until no
+    removal wins or C ≤ 3. Simplifications are vetoed (complex kept) when
+    the sibling breaches Tier-1-relevant properties: OOS max drawdown
+    worse than −25%, or DSR collapsing below 0.8 while the complex held
+    ≥ 0.8. Ablation verdicts never touch the in-sample `metrics`.
+  - `enumerate_removals` / `propose_removal_order` / `apply_removal` are
+    separately testable; the deterministic greedy fallback order applies
+    without an LLM, and one `llm_razor_challenger` proposal turn ranks
+    the removals when a hook is provided.
+  - Hand-maintained ablation tables `STRATEGY_PARAM_NEUTRALS`
+    (textbook-default param neutralizations) and
+    `STRATEGY_INDICATOR_SIMPLIFICATIONS` (indicator → simpler strategy
+    mappings); components the tables can't enumerate are recorded in the
+    transcript loudly, never silently.
+  - Transcript reuses the round-3 debate turn shape with agent IDs
+    `llm_razor_challenger` (proposal) and `razor_challenger` (one turn
+    per ablation); the verdict lands in
+    `debate.synthesis.razor` (`triggered`, `chain`, `final_complexity`).
+  - `TradeIdea` gains `simpler_sibling: dict | None` (the adopted
+    sibling's chain, final spec, and complexity journey; None when never
+    razored, never triggered, or fully survived). `attach_razor` binds a
+    razor outcome onto a `TradeIdea` via `dataclasses.replace`.
+  - `Desk` gains `razor`, `razor_oos_fn`, `llm_razor_challenger`
+    (all off by default, fail-soft: without `razor_oos_fn` the stage
+    records a skip note and ideas pass through unchanged); the razor
+    runs inside `Desk.run` after the overfit gate and before PM ranking.
+    `default_desk` passes the new knobs through.
+  - Synthetic fixtures prove redundant components are stripped and
+    useful ones kept (indicator + param + branch ablations, C 6 → 3);
+    the δ boundary, both vetoes, oos_fn failure, and the LLM ordering
+    are covered. Spec §7(a): the trigger fires on none of the 15
+    round-3 ideas (all C < 6) — regression-tested, they pass through
+    unchanged. REGCOND-1 and grandfathering tests stay green.
+
 ## [0.4.0] - 2026-09-27
 
 ### Added

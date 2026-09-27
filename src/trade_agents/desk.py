@@ -1,4 +1,4 @@
-"""The desk: researchers -> debate -> overfit gate -> PM -> risk manager.
+"""The desk: researchers -> debate -> overfit gate -> razor -> PM -> risk manager.
 
 ``Desk.run`` executes one research cycle and returns a
 :class:`DeskReport`.  Researchers are independent, so ``parallel=True``
@@ -11,6 +11,12 @@ Optional stages (all off by default, all fail-soft):
 - ``overfit_gate``: ideas must PASS the trade-overfit desk to reach the
   PM.  Needs ``idea_returns(idea_dict) -> returns``; ideas without a
   returns series are killed (missing data never passes).
+- ``razor``: Occam's Desk phase 2 — ideas with complexity C >= 6 face
+  the razor round (scripted OOS ablations) before PM ranking.  Needs
+  ``razor_oos_fn(spec) -> {"oos_sharpe", "oos_max_drawdown", "dsr"}``;
+  without it the stage records a skip note and ideas pass through
+  unchanged.  An optional ``llm_razor_challenger`` proposes the removal
+  order in one turn.
 - ``ledger_path``: record proposals, desk verdicts, and risk forecasts
   into a track-record JSONL ledger for the incentive system.
 - ``regime_context``: a trade-regime fused-context snapshot (see
@@ -48,6 +54,9 @@ class Desk:
         debate_rounds: int = 0,
         overfit_gate: bool = False,
         idea_returns: Callable[[dict], list[float] | None] | None = None,
+        razor: bool = False,
+        razor_oos_fn: Callable[[dict], dict] | None = None,
+        llm_razor_challenger: Callable | None = None,
         ledger_path: str | None = None,
         regime_context: dict | None = None,
         regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
@@ -62,6 +71,9 @@ class Desk:
         self.debate_rounds = debate_rounds
         self.overfit_gate = overfit_gate
         self.idea_returns = idea_returns
+        self.razor = razor
+        self.razor_oos_fn = razor_oos_fn
+        self.llm_razor_challenger = llm_razor_challenger
         self.ledger_path = ledger_path
         self.regime_context = regime_context
         self.regime_max_age_seconds = regime_max_age_seconds
@@ -90,6 +102,7 @@ class Desk:
         briefs = self._run_research(provider, strategy_factory, backtest_fn, parallel)
         briefs = self._run_debate(briefs)
         briefs = self._run_overfit_gate(briefs)
+        briefs = self._run_razor(briefs)
         self._record_ledger(briefs)
 
         ideas = self.pm.rank(briefs)
@@ -166,6 +179,27 @@ class Desk:
             briefs, returns_provider=self.idea_returns)
         return briefs
 
+    def _run_razor(self, briefs: list[Brief]) -> list[Brief]:
+        # Occam's Desk phase 2: after the overfit gate, before PM ranking.
+        # Fail-soft: without a razor_oos_fn the stage records a skip note
+        # and ideas pass through unchanged.
+        if not self.razor:
+            return briefs
+        from .razor import razor_brief
+
+        if self.razor_oos_fn is None:
+            for brief in briefs:
+                brief.notes["razor"] = {
+                    "n_ideas": len(brief.ideas), "n_triggered": 0,
+                    "n_adopted": 0,
+                    "skipped": "razor=True but no razor_oos_fn was provided; "
+                               "ideas pass through unchanged",
+                }
+            return briefs
+        return [razor_brief(b, self.razor_oos_fn,
+                            llm_razor_challenger=self.llm_razor_challenger)
+                for b in briefs]
+
     def _record_ledger(self, briefs: list[Brief]) -> None:
         if not self.ledger_path:
             return
@@ -213,6 +247,9 @@ def default_desk(
     debate_rounds: int = 0,
     overfit_gate: bool = False,
     idea_returns: Callable[[dict], list[float] | None] | None = None,
+    razor: bool = False,
+    razor_oos_fn: Callable[[dict], dict] | None = None,
+    llm_razor_challenger: Callable | None = None,
     ledger_path: str | None = None,
     regime_context: dict | None = None,
     regime_max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
@@ -221,10 +258,11 @@ def default_desk(
     """The standard desk: all seven scouts + PM + risk manager.
 
     ``debate_rounds`` / ``overfit_gate`` / ``idea_returns`` /
+    ``razor`` / ``razor_oos_fn`` / ``llm_razor_challenger`` /
     ``ledger_path`` enable the debate protocol, the overfitting-desk
-    promotion gate, and the track-record ledger; ``regime_context``
-    supplies the trade-regime fused context that scales order
-    quantities; remaining kwargs go to the portfolio manager.
+    promotion gate, the razor round, and the track-record ledger;
+    ``regime_context`` supplies the trade-regime fused context that
+    scales order quantities; remaining kwargs go to the portfolio manager.
     """
     return Desk(
         researchers=[cls() for cls in SCOUT_CLASSES],
@@ -234,6 +272,9 @@ def default_desk(
         debate_rounds=debate_rounds,
         overfit_gate=overfit_gate,
         idea_returns=idea_returns,
+        razor=razor,
+        razor_oos_fn=razor_oos_fn,
+        llm_razor_challenger=llm_razor_challenger,
         ledger_path=ledger_path,
         regime_context=regime_context,
         regime_max_age_seconds=regime_max_age_seconds,

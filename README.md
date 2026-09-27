@@ -337,6 +337,21 @@ oversized. Every step is a closed-form formula, not a black box.
   Replay against round 3 retains exactly 6 of 15 ideas and rejects 9
   (the thin-evidence tail the debate had already flagged); no Tier-1
   outcome changes.
+- *Razor round* (`razor.razor_idea`): every idea with C ≥ 6 is challenged
+  by scripted OOS ablations (indicators → free params → regime branches
+  → filters, or one LLM-proposed order). The complex version survives a
+  removal only when `Sharpe_complex − Sharpe_simple > δ` with `δ = 0.15`.
+  Why 0.15: the complexity rent λ ≈ 0.06 OOS Sharpe per unit, so 0.15 is
+  **2.5× the per-unit rent** — a component must pay two-and-a-half times
+  its own rent to stay — and it is **half the Tier-1 bar** (0.3 OOS
+  Sharpe), so nothing that survives is noise-scale. Siblings are vetoed
+  (complex kept) when they breach Tier-1-relevant properties: OOS max
+  drawdown worse than −25%, or DSR collapsing below 0.8 while the complex
+  held ≥ 0.8. Adoption recurses until no removal wins or C ≤ 3; every
+  ablation is one `razor_challenger` turn in the debate transcript, and
+  the adopted sibling lands in `TradeIdea.simpler_sibling`. Ablations run
+  on out-of-sample backtests only — the in-sample `metrics` are never
+  trusted for the verdict.
 
 **Honest limitations.**
 
@@ -360,6 +375,16 @@ oversized. Every step is a closed-form formula, not a black box.
   and the softmax temperature are conventions, not estimates — they
   encode the desk's values (recent evidence, accountability, humility),
   not calibrated optima.
+- The razor's ablation tables (`STRATEGY_PARAM_NEUTRALS`,
+  `STRATEGY_INDICATOR_SIMPLIFICATIONS`) are hand-maintained and only
+  cover the scout strategies — an idea the tables can't enumerate keeps
+  its complexity by default, which is the safe direction but means the
+  razor is only as thorough as its tables. The `razor_oos_fn` callback
+  must rebuild each sibling under *identical* data, cost model, and
+  walk-forward geometry; the razor cannot verify that, it can only trust
+  the contract. After a sibling is adopted, `score`/`conviction` keep
+  their research-stage values — the OOS verdicts live in the razor
+  chain, not in the score.
 - **Graded, not buckets.** The desk deliberately avoids labelled regime
   buckets ("risk-on"/"risk-off") at the sizing layer: noisy regime
   signals carry false precision, and a bucket boundary turns a 49→51
