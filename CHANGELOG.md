@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-27
+
+### Added
+- **Idea journal** — `trade_agents.idea_journal` (`IdeaJournal`,
+  `IdeaEntry`, `JournalError`), the desk's persistent research-intake
+  ledger: YouTube videos, papers, Reddit posts, and Charlie's notes
+  become dated, sourced, falsifiable hypotheses in a plain-data JSONL
+  store (one object per line, human-readable, git-diffable; default
+  `~/.trade-agents/idea-journal.jsonl`, overridable via
+  `TRADE_IDEA_JOURNAL` or `path=`).
+  - Lifecycle `inbox -> refined -> pre-registered -> tested -> adopted`
+    (`tested -> discarded`, any non-terminal `-> expired`) enforced in
+    `IdeaJournal.transition()` — illegal moves raise. Moves to
+    `pre-registered` and beyond require a `links` entry, so no idea
+    shortcuts past the gates.
+  - Decay model: `review_after = date_added + horizon(half_life_class)`
+    with `market-structure` 90d / `data-dependent` 180d / `timeless`
+    730d (documented in `docs/IDEA_JOURNAL.md`). `due_for_review(as_of)`
+    flags past-due ideas; review never auto-invalidates. Adopted ideas
+    stay reviewable; discarded/expired do not.
+  - Dedupe by claim, not source: `add_idea()` normalizes the claim and
+    converges onto an existing entry (appending to `sources[]`) instead
+    of duplicating — independent convergence is logged as signal.
+  - Desk seam: `pull_ideas(status=..., tags=...)` for researchers (clean
+    seam only — the desk is not rewired to consume it yet); agents can
+    also add ideas with `added_by` provenance.
+  - CLI: `trade-agents-ideas` with `add`, `list`, `review`, `show`,
+    `transition` (registered as a console script in `pyproject.toml`).
+  - `tests/test_idea_journal.py` (21 tests): full-pipeline transitions,
+    invalid moves, no-shortcut-past-gates, dedupe/convergence,
+    review_after per class, due_for_review semantics, pull_ideas
+    filtering, JSONL round-trip, env-var override, CLI smoke.
+  - Docs: `docs/IDEA_JOURNAL.md` (schema, lifecycle, decay model "the
+    maths", desk seam), README "Idea journal" section and maths entry.
+
 ## [0.8.0] - 2026-09-27
 
 ### Added

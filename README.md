@@ -227,10 +227,28 @@ Market data comes through the `BarsProvider` protocol (`get_bars(symbol)
 -> list`); `DictBarsProvider` covers tests and synthetic research. Plug
 in the `trade-data-*` engines by implementing the two-method protocol.
 
+## Idea journal
+
+The desk's research-intake ledger (`trade_agents.idea_journal`,
+`docs/IDEA_JOURNAL.md`): YouTube videos, papers, Reddit posts, and
+Charlie's notes become dated, sourced, falsifiable hypotheses in a
+plain-data JSONL store (`~/.trade-agents/idea-journal.jsonl`).
+Lifecycle `inbox -> refined -> pre-registered -> tested -> adopted`
+(`tested -> discarded`, any non-terminal `-> expired`) is enforced in
+code, and `pre-registered` and beyond require a recorded
+pre-registration/trial link — ideas cannot shortcut the gates. Dedupe is
+by *claim*, not source: independent convergence on one claim is logged,
+not silently merged. Each idea carries a half-life class
+(`market-structure` 90d, `data-dependent` 180d, `timeless` 730d) driving
+`review_after`; review flags for re-check, never auto-invalidates.
+Researchers pull via `pull_ideas(status=..., tags=...)`; CLI:
+`trade-agents-ideas add|list|review|show|transition`.
+
 ## Documentation
 
 - `docs/ARCHITECTURE.md` — desk pipeline, agent roles, failure semantics
 - `docs/DATA_AUDIT.md` — data-auditor role: detection thresholds ("the maths"), advisory-vs-blocking rationale
+- `docs/IDEA_JOURNAL.md` — idea journal: schema, lifecycle, decay model ("the maths"), desk seam
 - `docs/METHODOLOGY.md` — debate math, incentive formulas, why rule-based
 - `docs/RESEARCHERS.md` — all seven researchers: niches, universes, bars
 - `docs/INTEROP.md` — sibling integrations and how to add a researcher
@@ -256,7 +274,7 @@ in the `trade-data-*` engines by implementing the two-method protocol.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.7.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.9.0**.
 
 ## The maths
 
@@ -390,6 +408,20 @@ oversized. Every step is a closed-form formula, not a black box.
   event). Confirmed violations quarantine the symbol (stripped from the
   researchers' provider, reasons recorded loudly); the report lands on
   `DeskReport.data_audit`.
+- *Idea journal* (`IdeaJournal`, v0.9.0): research-intake ledger, not
+  evidence. `review_after = date_added + horizon(half_life_class)` with
+  `market-structure` 90d (microstructure edges decay via crowding and
+  venue changes), `data-dependent` 180d (feeds change coverage and die),
+  `timeless` 730d (math doesn't expire, but nothing goes unreviewed
+  forever). `due_for_review(as_of)` flags past-due reviewable ideas;
+  review never auto-invalidates. Dedupe normalizes the claim
+  (lowercase, punctuation/whitespace folded): a match appends to the
+  existing entry's `sources[]` and returns `converged` — independent
+  convergence is logged as signal. Lifecycle `inbox -> refined ->
+  pre-registered -> tested -> adopted` (`tested -> discarded`, any
+  non-terminal `-> expired`) is enforced in `transition()`; moves to
+  `pre-registered` and beyond require a `links` entry (no shortcuts
+  past the gates).
 
 **Honest limitations.**
 

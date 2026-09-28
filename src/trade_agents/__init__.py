@@ -58,6 +58,28 @@ from .debate import (
     synthesize,
 )
 from .desk import Desk, default_desk
+from .idea_journal import (
+    ADOPTED,
+    DISCARDED,
+    EXPIRED,
+    HALF_LIFE_CLASSES,
+    HALF_LIFE_DAYS,
+    INBOX,
+    JOURNAL_ENV_VAR,
+    PRE_REGISTERED,
+    REFINED,
+    REVIEWABLE_STATUSES,
+    SOURCE_TYPES,
+    STATUSES,
+    TERMINAL_STATUSES,
+    TESTED,
+    TRANSITIONS,
+    IdeaEntry,
+    IdeaJournal,
+    JournalError,
+    build_parser,
+    main as ideas_main,
+)
 from .portfolio_manager import (
     COMPLEXITY_BUDGET,
     MARGINAL_EPSILON,
@@ -97,7 +119,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -145,6 +167,27 @@ __all__ = [
     "MARGINAL_RHO_MAX",
     "MARGINAL_MIN_OVERLAP",
     "COMPLEXITY_BUDGET",
+    # idea journal (v0.9.0)
+    "IdeaEntry",
+    "IdeaJournal",
+    "JournalError",
+    "build_parser",
+    "ideas_main",
+    "INBOX",
+    "REFINED",
+    "PRE_REGISTERED",
+    "TESTED",
+    "ADOPTED",
+    "DISCARDED",
+    "EXPIRED",
+    "STATUSES",
+    "TERMINAL_STATUSES",
+    "REVIEWABLE_STATUSES",
+    "TRANSITIONS",
+    "SOURCE_TYPES",
+    "HALF_LIFE_CLASSES",
+    "HALF_LIFE_DAYS",
+    "JOURNAL_ENV_VAR",
     # regime-aware sizing (v0.3.0)
     "normalize_regime_context",
     "conviction_size_scale",
