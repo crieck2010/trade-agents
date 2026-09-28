@@ -92,6 +92,18 @@ from .regime import (
     conviction_size_scale,
     normalize_regime_context,
 )
+from .scripted import (
+    SCRIPTED_EPOCH,
+    ScriptedChallenger,
+    ScriptedModeError,
+    ScriptedScout,
+    assert_scripted_wiring,
+    canonical,
+    load_corpus,
+    make_desk,
+    run_scripted_pipeline,
+    sha256_hex,
+)
 from .razor import (
     RAZOR_DSR_BAR,
     RAZOR_FLOOR_C,
@@ -119,7 +131,7 @@ from .track_record import (
     score_all,
 )
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -192,6 +204,17 @@ __all__ = [
     "normalize_regime_context",
     "conviction_size_scale",
     "DEFAULT_MAX_AGE_SECONDS",
+    # scripted (zero-LLM) mode (v0.10.0)
+    "SCRIPTED_EPOCH",
+    "ScriptedChallenger",
+    "ScriptedModeError",
+    "ScriptedScout",
+    "assert_scripted_wiring",
+    "canonical",
+    "load_corpus",
+    "make_desk",
+    "run_scripted_pipeline",
+    "sha256_hex",
     # debate protocol (v0.2.0)
     "debate_idea",
     "debate_ideas",

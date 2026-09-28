@@ -98,6 +98,46 @@ def cmd_update_check(args) -> int:
     return 0
 
 
+def cmd_run(args) -> int:
+    import json as _json
+    from .scripted import (
+        assert_scripted_wiring,
+        load_corpus,
+        make_desk,
+        run_scripted_pipeline,
+    )
+    corpus = load_corpus(args.corpus)
+    journal = None
+    if args.journal:
+        from .idea_journal import IdeaJournal
+        journal = IdeaJournal(path=args.journal)
+    if args.mode == "scripted":
+        # fail-closed: the proving run refuses any LLM wiring
+        assert_scripted_wiring(make_desk("scripted"))
+    artifact, digest = run_scripted_pipeline(
+        corpus=corpus, journal=journal, seed=args.seed, mode=args.mode)
+    if args.out:
+        with open(args.out, "w") as f:
+            _json.dump(artifact, f, indent=2, default=str)
+    t = artifact["stages"]["tier1"]["payload"]
+    if args.format == "json":
+        print(_json.dumps({"digest": digest, "mode": args.mode,
+                           "n_candidates": t["n_candidates"],
+                           "n_pass": t["n_pass"], "n_fail": t["n_fail"],
+                           "artifact": args.out}, indent=2))
+    else:
+        print(f"scripted pipeline [{args.mode}] digest={digest[:16]}...")
+        print(f"Tier-1: {t['n_pass']} pass / {t['n_fail']} fail "
+              f"of {t['n_candidates']} candidates")
+        print(f"PM admitted: "
+              f"{artifact['stages']['pm_ranking']['payload']['n_admitted']}, "
+              f"allocations: "
+              f"{artifact['stages']['allocator']['payload']['n_allocations']}")
+        if args.mode == "scripted":
+            print("LLM attestation:", artifact["llm_attestation"])
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="trade-agents",
                                 description="Hedge-fund research desk CLI")
@@ -125,6 +165,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     up = sub.add_parser("update-check", help="check for a newer release")
     up.set_defaults(func=cmd_update_check)
+
+    rn = sub.add_parser(
+        "run",
+        help="run the desk pipeline over a frozen corpus (proving mode)")
+    rn.add_argument("--mode", choices=["llm", "scripted"], default="llm",
+                    help="scripted: fail-closed zero-LLM run with an "
+                         "attestation block (default: llm)")
+    rn.add_argument("--corpus", default=None,
+                    help="path to a corpus fixture JSON "
+                         "(default: the frozen round-3 corpus)")
+    rn.add_argument("--journal", default=None,
+                    help="path to an idea-journal JSONL for intake")
+    rn.add_argument("--seed", type=int, default=0,
+                    help="determinism seed (recorded in the artifact)")
+    rn.add_argument("--out", default=None,
+                    help="write the canonical run artifact JSON here")
+    rn.add_argument("--format", choices=["table", "json"], default="table")
+    rn.set_defaults(func=cmd_run)
     return p
 
 

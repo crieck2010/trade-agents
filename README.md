@@ -244,6 +244,36 @@ not silently merged. Each idea carries a half-life class
 Researchers pull via `pull_ideas(status=..., tags=...)`; CLI:
 `trade-agents-ideas add|list|review|show|transition`.
 
+## Scripted (zero-LLM) mode
+
+The proving harness for the 0%-dependence goal
+(`trade_agents.scripted`, `docs/SCRIPTED_MODE.md`): the full pipeline —
+intake → debate → razor trigger check → Tier-1 challenge → PM marginal
+ranking → allocator → risk review — runs with no model in the loop.
+
+```bash
+trade-agents run --mode scripted --out proving.json
+# scripted pipeline [scripted] digest=d29f4aa8a0e46797...
+# Tier-1: 0 pass / 15 fail of 15 candidates
+# PM admitted: 0, allocations: 0
+```
+
+`make_desk(mode="scripted")` fail-closes on any LLM hook
+(`advisor`, `llm_razor_challenger` raise `ScriptedModeError` instead of
+wiring); `ScriptedScout` retrieves from the frozen round-3 corpus
+fixture and/or `IdeaJournal.pull_ideas()` — zero generation;
+`ScriptedChallenger` recomputes the walk-forward Tier-1 gates with the
+same `trade_overfit` code path round 3 used. Runs are deterministic:
+pinned clock + canonical JSON + hash-chained stage artifacts, so the
+same seed + input + clock yields a byte-identical digest. The proving
+test reproduces the recorded round-3 verdicts exactly (0/15 Tier-1
+passes, identical per-gate failures and values) with network access
+stubbed to raise.
+
+Honest limits: scripted mode retrieves, never invents hypotheses, and
+can't do qualitative economic judgment — see `docs/SCRIPTED_MODE.md`
+for what's gained, what's lost, and the roadmap to full 0%.
+
 ## Documentation
 
 - `docs/ARCHITECTURE.md` — desk pipeline, agent roles, failure semantics

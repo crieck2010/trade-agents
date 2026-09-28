@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-28
+
+### Added
+- **Scripted (zero-LLM) mode** — `trade_agents.scripted`, the proving
+  harness for the 0%-dependence goal: the full desk pipeline (intake ->
+  debate -> razor trigger check -> Tier-1 challenge -> PM marginal
+  ranking -> allocator -> risk review) runs end-to-end with no model in
+  the loop.
+  - Mode seam: LLM calls only ever entered through three optional hooks
+    (`advisor`, debate `llm_challenger`, `llm_razor_challenger`).
+    `make_desk(mode="scripted")` fail-closes — any hook raises
+    `ScriptedModeError`; `assert_scripted_wiring(desk)` audits a built
+    desk. Desk orchestration never branches on mode; only the agent
+    implementations swap.
+  - `ScriptedScout` implements the `research(provider, strategy_factory,
+    backtest_fn) -> Brief` contract via retrieval (frozen corpus fixture
+    + `IdeaJournal.pull_ideas()`), zero generation. `ScriptedChallenger`
+    recomputes the round-3 walk-forward Tier-1 gates with the same
+    `trade_overfit` code path (five gates, DSR, complexity bar; the
+    cost-speed-limit gate is advisory-only since it postdates round 3).
+  - Determinism model: pinned clock + canonical JSON
+    (`sort_keys`, compact separators) + hash-chained stage artifacts;
+    same seed + input + clock -> byte-identical digest.
+  - Frozen fixture `src/trade_agents/fixtures/round3_corpus.json`
+    (per-idea OOS test windows, 69 DSR trial Sharpes, recorded gate
+    values as the fidelity oracle; provenance in
+    `fixtures/PROVENANCE.md`), shipped as package data.
+  - CLI: `trade-agents run --mode {llm,scripted}` (default `llm`).
+  - Proving tests (`tests/test_scripted_mode.py`, 15 tests):
+    determinism (two runs byte-identical), fidelity (0/15 Tier-1 passes
+    with bit-identical per-gate values to the recorded round-3
+    evidence), zero-LLM (hooks refused, pipeline completes with network
+    stubbed to raise), agent-contract conformance, journal intake
+    killed fail-closed without evidence.
+  - Docs: `docs/SCRIPTED_MODE.md` (architecture, determinism maths,
+    contract table, honest gains/losses, dependence roadmap).
+
 ## [0.9.0] - 2026-09-27
 
 ### Added
