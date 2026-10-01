@@ -141,6 +141,7 @@ class IdeaEntry:
     sources: list = field(default_factory=list)
     links: dict = field(default_factory=dict)
     notes: str = ""
+    dissent_events: list = field(default_factory=list)
 
     def __post_init__(self):
         if not self.title or not self.claim:
@@ -165,6 +166,8 @@ class IdeaEntry:
             raise JournalError("sources must be a list")
         if not isinstance(self.links, dict):
             raise JournalError("links must be a dict")
+        if not isinstance(self.dissent_events, list):
+            raise JournalError("dissent_events must be a list")
 
     def to_dict(self) -> dict:
         return {
@@ -183,6 +186,7 @@ class IdeaEntry:
             "sources": [dict(s) for s in self.sources],
             "links": dict(self.links),
             "notes": self.notes,
+            "dissent_events": [dict(e) for e in self.dissent_events],
         }
 
     @classmethod
@@ -195,10 +199,12 @@ class IdeaEntry:
         data.setdefault("sources", [])
         data.setdefault("links", {})
         data.setdefault("notes", "")
+        data.setdefault("dissent_events", [])
         return cls(**{k: data[k] for k in (
             "id", "title", "claim", "source_type", "source_ref",
             "date_observed", "date_added", "added_by", "status", "tags",
-            "half_life_class", "review_after", "sources", "links", "notes")})
+            "half_life_class", "review_after", "sources", "links", "notes",
+            "dissent_events")})
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +395,21 @@ class IdeaJournal:
         stamp = _iso_today()
         entry.notes = (entry.notes + f"\n[{stamp}] {note}").strip() \
             if entry.notes else f"[{stamp}] {note}"
+        self._save()
+        return entry
+
+    def record_dissent_event(self, entry_id: str, event: dict) -> IdeaEntry:
+        """Append a dissent event to an entry (append-only; never edits).
+
+        ``event`` is a plain dict (see ``trade_agents.dissent`` for the
+        schema); it is stored as-is.  Unknown ids raise ``JournalError`` —
+        use ``trade_agents.dissent.record_dissent`` for the fail-soft
+        path that never raises.
+        """
+        if not isinstance(event, dict):
+            raise JournalError("dissent event must be a dict")
+        entry = self.get(entry_id)
+        entry.dissent_events.append(dict(event))
         self._save()
         return entry
 

@@ -84,6 +84,7 @@ class Desk:
         audit_membership: dict | None = None,
         audit_corporate_actions: dict | None = None,
         audit_calendars: dict | None = None,
+        journal=None,
     ) -> None:
         self.researchers = (
             researchers if researchers is not None
@@ -112,6 +113,10 @@ class Desk:
         self.audit_corporate_actions = audit_corporate_actions
         self.audit_calendars = audit_calendars
         self.last_audit: dict = {}  # audit report of the most recent run
+        # Optional IdeaJournal for dissent capture; None (default) resolves
+        # the standard journal location inside record_dissent.  Tests pass
+        # an explicit tmp-path journal.
+        self.journal = journal
 
     def run(
         self,
@@ -142,6 +147,7 @@ class Desk:
         briefs = self._run_overfit_gate(briefs)
         briefs = self._run_razor(briefs)
         self._record_ledger(briefs)
+        self._record_dissent_events(briefs)
 
         ideas = self.pm.rank(briefs)
         ideas, marginal_report, budget_report = self._run_marginal_ranking(ideas)
@@ -289,6 +295,32 @@ class Desk:
                 if overfit.get("verdict") in ("PASS", "FAIL"):
                     ledger.record_desk_verdict(
                         iid, "PASS" if overfit["verdict"] == "PASS" else "KILL")
+
+    def _record_dissent_events(self, briefs: list[Brief]) -> None:
+        """Fail-soft dissent capture for journal-linked ideas.
+
+        When the overfit gate (the desk's deterministic challenger)
+        KILLs an idea that originated from the idea journal
+        (``strategy="journal:<idea-id>"``), record a
+        ``researcher -> challenger, kill`` dissent event.  Never raises
+        and never changes validation outcomes -- ``record_dissent``
+        itself is fail-soft.  PM-adoption overrides and risk vetoes are
+        operator decisions, recorded explicitly via
+        ``trade_agents.dissent.record_dissent`` (see that module).
+        """
+        from .dissent import journal_id_of, record_dissent
+
+        for brief in briefs:
+            for idea in brief.ideas:
+                jid = journal_id_of(idea)
+                if not jid:
+                    continue
+                overfit = (idea.debate or {}).get("overfit") or {}
+                if overfit.get("verdict") == "FAIL":
+                    reason = (overfit.get("reason")
+                              or "overfit gate KILL (challenger verdict)")
+                    record_dissent(jid, "researcher", "challenger",
+                                   "kill", reason, journal=self.journal)
 
     def _record_risk_forecasts(self, approved: list[dict]) -> None:
         if not self.ledger_path:

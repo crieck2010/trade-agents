@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-10-01
+
+### Added
+- **Desk dissent tracker** (`trade_agents.dissent`, CLI
+  `trade-agents-dissent report [--round N] [--format text|json]`):
+  makes agent disagreement visible instead of assumed.  Every time a
+  downstream role rejects, rescues, or overrides an upstream role's
+  advance on a journaled idea, an append-only event lands on the
+  idea's `dissent_events` list —
+  `{from_role, to_role, direction, reason, at}` with roles
+  `scout/researcher/challenger/pm/risk` and directions
+  `kill` (downstream rejects), `save` (downstream advances what was
+  doubted), `override` (PM decides against the challenger's verdict).
+  `dissent_report(ideas, round=None)` returns `n_ideas`,
+  `n_evaluated`, `n_dissent_events`, `dissent_rate` (dissenting ideas /
+  evaluated ideas), a `(from->to:direction)` breakdown, and
+  `theater_warning` — true when a full round's evaluated ideas produced
+  zero dissent events ("possible echo chamber — agents never
+  disagreed"), the exact failure mode the tracker exists to catch.
+  - `IdeaJournal` gains append-only `dissent_events` per entry
+    (schema-extended, old entries load with `[]`) and
+    `record_dissent_event()`; `record_dissent()` never raises —
+    bad input yields a validation note on the idea instead, because
+    journal writes must not crash research.
+  - Minimal desk wiring: `Desk._record_dissent_events` records
+    `researcher -> challenger, kill` when the overfit gate FAILs a
+    journal-linked idea (`strategy="journal:<idea-id>"`, threaded
+    through by the scripted journal intake); optional `journal=`
+    constructor arg (default resolves the standard journal location).
+    No validation logic or gate outcomes changed.  PM-adoption
+    overrides and risk vetoes stay explicit operator calls via
+    `record_dissent` (adoption is a human decision, not
+    auto-detectable).
+  - 24 tests (module, report math, theater warning, round filtering,
+    CLI smoke, desk seam); round-5 backfill: 9 challenger kills +
+    1 PM override → dissent_rate 1.00 on 10 evaluated ideas.
+
 ## [0.10.0] - 2026-09-28
 
 ### Added
