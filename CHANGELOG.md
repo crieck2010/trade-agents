@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-10-07
+
+### Added
+- **Live-side decay monitoring** via the new sibling engine
+  [trade-decay](https://github.com/crieck2010/trade-decay) v0.1.0:
+  the idea journal's research-side decay review
+  (`half_life_class`, `due_for_review()`) now has a live-side
+  companion that watches *adopted* strategies against their Tier-1
+  validation expectations (trailing Sharpe vs expected, divergence
+  z-score, rolling half-life fit, realized vs validation maxDD) and
+  moves a `healthy -> watchlist -> demoted` state machine.
+  Demotion emits a recommendation to retire; the engine never
+  touches a broker or an allocator.
+  - New `docs/DECAY.md`: the two-sided decay story, the
+    adopt → register handoff (including reusing the journal's
+    `half_life_class` for the live registration), and what the desk
+    does with `watchlist` / `demoted` signals. A demoted strategy's
+    research record is not auto-invalidated — "this deployment
+    decayed" is a different claim from "this idea was never valid".
+  - `docs/INTEROP.md`: new `trade-decay` section with consumer
+    wiring (open desk sessions with `trade-decay report`; run
+    `trade-decay evaluate` after the day's last pointed paper run).
+  - Language standard, both sides: validated / invalidated /
+    discarded / demoted — never "kill".
+
 ## [0.11.0] - 2026-10-01
 
 ### Added

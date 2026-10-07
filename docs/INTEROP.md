@@ -76,6 +76,27 @@ just the ticket. trade-paper's `ledger.submit_approval` accepts these
 payloads as the discovery `d` (key/strategy/symbols/direction/metrics/
 score) with `chain` as the chain verdict.
 
+## trade-decay (live-side decay monitor) *(new in v0.12.0)*
+
+[trade-decay](https://github.com/crieck2010/trade-decay) is the
+live-side companion to this repo's research-side decay review
+(`docs/DECAY.md`): the journal asks "is this idea still worth
+testing?", trade-decay asks "is this live strategy still earning its
+capital?" Both share the half-life vocabulary (`market-structure` /
+`data-dependent` / `timeless`).
+
+Wiring: when the desk adopts an idea, register it in trade-decay with
+its Tier-1 validation expectations (`expected_sharpe`,
+`expected_sharpe_std`, `validation_maxdd`). The engine compares
+trailing paper performance against those expectations and moves a
+`healthy -> watchlist -> demoted` state machine; demotion emits a
+*recommendation to retire* — the engine never touches a broker or an
+allocator. Desk sessions open with `trade-decay report`; `watchlist`
+rows earn a journal note on the adopted idea, `demoted` rows earn an
+operator decision. A demoted strategy's research record is not
+auto-invalidated — "this deployment decayed" is a different claim
+from "this idea was never valid".
+
 ## trade-overfit (the promotion gate) *(new in v0.2.0)*
 
 `adapters.gate_briefs_with_overfit(briefs, returns_provider)` runs every
