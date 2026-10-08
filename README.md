@@ -101,6 +101,54 @@ debate never crashes on the model.
 Debate vote weights scale with track record (see below): agents that
 have been right get louder.
 
+## Typed verdicts
+
+Agent stances used to be free-text sentences. `trade_agents.verdicts`
+gives them typed shapes with explicit probabilities, so conviction is
+auditable instead of vibes:
+
+- **`Belief`** — one proposition with a stated probability
+  ("is this true?" as a number, not a paragraph).
+- **`Choice`** — pick among named options, probabilities summing to 1.
+- **`Score`** — rate on an ordered rubric, with per-level probabilities.
+- **`Abstain`** — explicit, first-class "no trade / no judgment" with a
+  reason. Doing nothing must be *representable*, not just the absence of
+  output. Silence is ambiguous; `Abstain` is not.
+
+```python
+from trade_agents import Belief, Abstain
+from trade_agents.dissent import record_dissent
+
+# challenger kills with a stated 92% credence
+verdict = Belief(proposition="DSR 0.00 invalidates the edge",
+                 p=0.92, confidence=0.8)
+record_dissent(idea_id, "researcher", "challenger", "kill",
+               "invalidated 4/6: DSR 0.00", verdict=verdict)
+```
+
+These are the agent's **stated credences**, not calibrated frequencies:
+`p=0.8` means "the agent claims 80%", and whether it is right 80% of the
+time is a separate fact earned through the track record over time.
+
+**The judge-makes-no-decisions rule:** verdicts are *inputs* to the PM
+and the deterministic gates. No verdict, however confident, can place,
+size, or approve a trade on its own. The PM decides; the gates
+validate. The model judges, the code decides — this separation is the
+whole point.
+
+The dissent tracker (`trade-agents-dissent`) accepts an optional
+`verdict=` on every dissent event (additive; old entries keep working),
+and the report summarizes them: verdict-type distribution, mean stated
+probability per direction, the challenger's stated kill probability, and
+abstain counts — in both text and JSON.
+
+**Backend-agnostic by construction.** The module is stdlib-only with no
+model API, no network calls, and no API keys. It implements the *pattern*
+(typed primitives + judge/code separation), not any vendor: no
+Jev/TypeSafe/LLM-specific code lives here, by an explicit decision for
+vendor independence — the suite's 0%-external-dependence goal. A future
+local model plugs into the same primitives unchanged.
+
 ## Track records & incentives
 
 Every agent earns a public, auditable track record from **realized

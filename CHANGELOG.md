@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-10-08
+
+### Added
+- **Typed probabilistic verdicts** (`trade_agents.verdicts`): agent
+  stances as typed data instead of free-text sentences — `Belief`
+  (proposition + p in [0,1]), `Choice` (named options with
+  sum-to-1 probabilities), `Score` (ordered rubric + per-level
+  probabilities), and `Abstain` (explicit first-class "no trade / no
+  judgment" with a reason).  Frozen dataclasses, stdlib only;
+  constructors raise `ValueError` on invalid input (never silently
+  clamp); every type round-trips through `to_dict()` /
+  `verdict_from_dict()`.  The module docstring states the semantics
+  honestly: these are *stated credences*, not calibrated frequencies --
+  calibration is earned via the track record over time -- and the
+  **judge-makes-no-decisions rule**: verdicts are inputs to the PM and
+  the deterministic gates; no verdict can place, size, or approve a
+  trade on its own.
+- The dissent tracker accepts an optional `verdict=` on
+  `record_dissent()` (additive and backward compatible; old journal
+  entries keep reading) and `trade-agents-dissent report` gains a
+  verdict summary -- type distribution, mean stated probability per
+  direction, the challenger's stated kill probability, abstain counts --
+  in both text and JSON formats.
+- Explicit non-goal, documented in the README: no Jev/TypeSafe/model-API
+  integration.  The module implements the *pattern* (typed primitives +
+  judge/code separation), not the vendor -- backend-agnostic by
+  construction, so a future local model plugs in unchanged (suite
+  0%-external-dependence goal).
+
+### Fixed
+- `trade_agents.__version__` was stale at `"0.10.0"` while the package
+  was at 0.12.0; now tracks the release version (`0.13.0`).
+
 ## [0.12.0] - 2026-10-07
 
 ### Added

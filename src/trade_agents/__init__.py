@@ -130,8 +130,19 @@ from .track_record import (
     risk_calibration_score,
     score_all,
 )
+from .verdicts import (
+    PROB_SUM_TOL,
+    VERDICT_TYPES,
+    Abstain,
+    Belief,
+    Choice,
+    Score,
+    Verdict,
+    coerce_verdict,
+    verdict_from_dict,
+)
 
-__version__ = "0.10.0"
+__version__ = "0.13.0"
 __all__ = [
     "Agent",
     "Allocation",
@@ -234,5 +245,15 @@ __all__ = [
     "debate_weights",
     "score_all",
     "leaderboard",
+    # typed probabilistic verdicts (v0.13.0)
+    "Belief",
+    "Choice",
+    "Score",
+    "Abstain",
+    "Verdict",
+    "verdict_from_dict",
+    "coerce_verdict",
+    "PROB_SUM_TOL",
+    "VERDICT_TYPES",
     "__version__",
 ]

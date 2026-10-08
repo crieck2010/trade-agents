@@ -52,6 +52,7 @@ import sys
 from datetime import date
 
 from .idea_journal import IdeaJournal, JournalError
+from .verdicts import Verdict, coerce_verdict
 
 # ---------------------------------------------------------------------------
 # constants
@@ -108,7 +109,8 @@ def journal_id_of(idea) -> str | None:
 def record_dissent(idea_id: str, from_role: str, to_role: str,
                    direction: str, reason: str,
                    journal: IdeaJournal | None = None,
-                   at: str | None = None) -> dict:
+                   at: str | None = None,
+                   verdict: Verdict | dict | None = None) -> dict:
     """Record a dissent event on a journaled idea.  Never raises.
 
     On invalid input returns ``{"ok": False, "note": ...}`` and, when
@@ -120,10 +122,20 @@ def record_dissent(idea_id: str, from_role: str, to_role: str,
     (``$TRADE_IDEA_JOURNAL`` or ``~/.trade-agents/idea-journal.jsonl``);
     pass an explicit ``IdeaJournal`` (e.g. on a tmp path) in tests.
     ``at`` defaults to today; backfills pass the decision date.
+
+    ``verdict`` (v0.13.0) is an optional typed probabilistic verdict
+    (:mod:`trade_agents.verdicts` instance or ``to_dict()``-shaped
+    dict) capturing the agent's stated credence behind the stance.
+    Additive and backward compatible: calls without it behave exactly
+    as before, and older journal entries without a verdict keep
+    reading.  A malformed verdict is treated like any other bad input
+    (note attached, event not recorded) -- verdicts never crash
+    research.
     """
     try:
         return _record_dissent(idea_id, from_role, to_role, direction,
-                               reason, journal=journal, at=at)
+                               reason, journal=journal, at=at,
+                               verdict=verdict)
     except Exception as exc:  # journal writes must not crash research
         return {"ok": False,
                 "note": f"dissent write failed ({exc}); event dropped, "
@@ -132,7 +144,7 @@ def record_dissent(idea_id: str, from_role: str, to_role: str,
 
 
 def _record_dissent(idea_id, from_role, to_role, direction, reason,
-                    journal=None, at=None) -> dict:
+                    journal=None, at=None, verdict=None) -> dict:
     problems: list[str] = []
     if from_role not in ROLES:
         problems.append(
@@ -149,6 +161,12 @@ def _record_dissent(idea_id, from_role, to_role, direction, reason,
             date.fromisoformat(at)
         except (TypeError, ValueError):
             problems.append(f"at must be YYYY-MM-DD, got {at!r}")
+    verdict_dict = None
+    if verdict is not None:
+        try:
+            verdict_dict = coerce_verdict(verdict).to_dict()
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            problems.append(f"verdict invalid: {exc}")
 
     journal = journal if journal is not None else IdeaJournal()
     try:
@@ -173,6 +191,8 @@ def _record_dissent(idea_id, from_role, to_role, direction, reason,
         "reason": str(reason).strip()[:500],
         "at": at or _iso_today(),
     }
+    if verdict_dict is not None:
+        event["verdict"] = verdict_dict
     journal.record_dissent_event(entry.id, event)
     return {"ok": True, "event": event}
 
@@ -208,7 +228,13 @@ def dissent_report(ideas: list, round: int | None = None) -> dict:
          "n_dissent_events": int, "dissent_rate": float,
          "dissenting_idea_ids": [...],
          "breakdown": {"researcher->challenger:kill": int, ...},
-         "theater_warning": bool}
+         "theater_warning": bool,
+         "verdict_summary": {"n_events_with_verdict": int,
+                             "by_type": {"belief": int, "choice": int,
+                                         "score": int, "abstain": int},
+                             "mean_p_by_direction": {"kill": float|None, ...},
+                             "challenger_kill_p": float | None,
+                             "n_abstain": int}}
 
     ``dissent_rate`` = ideas with >= 1 event / evaluated ideas, where
     "evaluated" means the idea reached a decision point (pre-registered
@@ -249,6 +275,70 @@ def dissent_report(ideas: list, round: int | None = None) -> dict:
         "breakdown": dict(sorted(breakdown.items())),
         "theater_warning": bool(round is not None and n_evaluated > 0
                                 and not dissenting),
+        "verdict_summary": _verdict_summary(evaluated),
+    }
+
+
+def _verdict_summary(evaluated: list[dict]) -> dict:
+    """Aggregate the typed verdicts attached to dissent events.
+
+    Returns plain data::
+
+        {"n_events_with_verdict": int,
+         "by_type": {"belief": int, "choice": int, "score": int,
+                     "abstain": int},
+         "mean_p_by_direction": {"kill": float|None, "save": float|None,
+                                 "override": float|None},
+         "challenger_kill_p": float | None,
+         "n_abstain": int}
+
+    ``mean_p_by_direction`` is the mean stated probability of ``Belief``
+    verdicts per dissent direction (``None`` when a direction carries no
+    ``Belief`` verdicts).  ``challenger_kill_p`` is the mean ``Belief``
+    p on kill events at the challenger stage (``to_role == challenger``
+    -- the desk's wiring records a challenger invalidation as
+    ``researcher -> challenger: kill``, so the challenger's stated kill
+    credence lives there).  Malformed verdict payloads are skipped;
+    the report never crashes on journal data.
+    """
+    by_type = {"belief": 0, "choice": 0, "score": 0, "abstain": 0}
+    p_sums: dict[str, float] = {}
+    p_counts: dict[str, int] = {}
+    ck_sum, ck_n = 0.0, 0
+    n_with = 0
+    for row in evaluated:
+        for ev in row.get("dissent_events") or []:
+            v = ev.get("verdict")
+            if not isinstance(v, dict):
+                continue
+            kind = v.get("type")
+            if kind not in by_type:
+                continue  # malformed payload: skip, don't crash
+            n_with += 1
+            by_type[kind] += 1
+            if kind != "belief":
+                continue
+            try:
+                p = float(v["p"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            direction = ev.get("direction")
+            p_sums[direction] = p_sums.get(direction, 0.0) + p
+            p_counts[direction] = p_counts.get(direction, 0) + 1
+            if ev.get("to_role") == CHALLENGER and direction == KILL:
+                ck_sum += p
+                ck_n += 1
+    return {
+        "n_events_with_verdict": n_with,
+        "by_type": by_type,
+        "mean_p_by_direction": {
+            d: (_builtin_round(p_sums[d] / p_counts[d], 4)
+                if d in p_counts else None)
+            for d in DIRECTIONS
+        },
+        "challenger_kill_p": (_builtin_round(ck_sum / ck_n, 4)
+                              if ck_n else None),
+        "n_abstain": by_type["abstain"],
     }
 
 
@@ -277,6 +367,27 @@ def _fmt_report(rep: dict) -> str:
     if rep["dissenting_idea_ids"]:
         lines.append("  dissenting ideas: "
                      + ", ".join(rep["dissenting_idea_ids"]))
+    vs = rep.get("verdict_summary") or {}
+    if vs.get("n_events_with_verdict"):
+        bt = vs.get("by_type") or {}
+        lines.append(
+            "  verdicts: "
+            + str(vs["n_events_with_verdict"])
+            + " events carry typed verdicts ("
+            + ", ".join(f"{k}={bt.get(k, 0)}"
+                        for k in ("belief", "choice", "score", "abstain"))
+            + ")")
+        mp = vs.get("mean_p_by_direction") or {}
+        lines.append(
+            "  mean stated p by direction: "
+            + ", ".join(f"{d}={mp.get(d) if mp.get(d) is not None else '-'}"
+                        for d in ("kill", "save", "override")))
+        ck = vs.get("challenger_kill_p")
+        lines.append(
+            f"  challenger kill p: {ck if ck is not None else '-'}  "
+            f"(abstains: {vs.get('n_abstain', 0)})")
+    else:
+        lines.append("  verdicts: (no typed verdicts recorded)")
     if rep["theater_warning"]:
         lines.append("  THEATER WARNING: a full round with zero dissent "
                      "events -- possible echo chamber, agents never disagreed")
