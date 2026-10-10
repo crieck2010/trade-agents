@@ -1,4 +1,12 @@
+> [!TIP]
+> **Available Standalone & Unified in [TradeSuite](https://github.com/crieck2010/trade-suite)**  
+> `trade-agents` powers the autonomous multi-agent research desk in the unified [TradeSuite ecosystem](https://github.com/crieck2010/trade-suite). You can use this engine standalone or as part of the full quantitative monorepo.
+
 # trade-agents
+
+[![CI](https://github.com/crieck2010/trade-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/crieck2010/trade-agents/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The hedge-fund research desk as a library, for the
 [trade-suite](https://github.com/crieck2010/trade-suite). Pure Python,

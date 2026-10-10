@@ -74,12 +74,14 @@ def test_normalize_timestamp_formats():
     n = normalize_regime_context(make_snapshot(timestamp=now.strftime("%Y-%m-%dT%H:%M:%SZ")))
     assert n["is_fallback"] is False and n["timestamp"].endswith("+00:00")
     # numeric offset: same instant, offset preserved
-    n = normalize_regime_context(make_snapshot(timestamp="2026-09-26T16:00:00-04:00"))
+    recent_offset = (now - timedelta(minutes=5)).astimezone(timezone(timedelta(hours=-4))).isoformat()
+    n = normalize_regime_context(make_snapshot(timestamp=recent_offset))
     assert n["is_fallback"] is False
-    assert n["timestamp"] == "2026-09-26T16:00:00-04:00"
+    assert n["timestamp"] == recent_offset
     assert n["staleness_seconds"] is not None
     # naive -> treated as UTC
-    n = normalize_regime_context(make_snapshot(timestamp="2026-09-26T20:00:00"))
+    recent_naive = (now - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S")
+    n = normalize_regime_context(make_snapshot(timestamp=recent_naive))
     assert n["is_fallback"] is False and n["timestamp"].endswith("+00:00")
     # datetime object, naive
     n = normalize_regime_context(make_snapshot(timestamp=now.replace(tzinfo=None)))

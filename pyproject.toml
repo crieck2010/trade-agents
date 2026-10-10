@@ -34,3 +34,4 @@ trade_agents = ["fixtures/*.json", "fixtures/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

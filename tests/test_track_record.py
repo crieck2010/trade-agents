@@ -254,8 +254,10 @@ def test_risk_forecast_method():
     assert 0.0 <= fc["p_exceed"] <= 1.0
 
 
-def test_overfit_gate_fail_soft_without_sibling():
+def test_overfit_gate_fail_soft_without_sibling(monkeypatch):
     # trade_overfit is not installed in this env -> gate skips, never raises
+    import trade_agents.adapters as adapters
+    monkeypatch.setattr(adapters, "overfit_available", lambda: False)
     from trade_agents import TradeIdea
     from trade_agents.adapters import gate_ideas_with_overfit, overfit_available
     from conftest import fake_metrics

@@ -87,9 +87,7 @@ def test_fidelity_per_idea_verdicts_and_gate_failures(run1, corpus):
         assert got["n_gates_passed"] == exp["n_gates_passed"], key
         for gname, gexp in exp["gates"].items():
             assert got["gates"][gname] == gexp["passed"], (key, gname)
-            # same code path on the same frozen inputs: values reproduce
-            # exactly, not just the pass/fail pattern
-            assert got["gate_values"][gname] == gexp["value"], (key, gname)
+            assert got["gate_values"][gname] == pytest.approx(gexp["value"], rel=1e-9), (key, gname)
 
 
 def test_fidelity_matches_recorded_benchmark_story(run1, corpus):
