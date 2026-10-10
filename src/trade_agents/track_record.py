@@ -80,7 +80,7 @@ def oos_sharpe(returns: list[float], periods: int = PERIODS_PER_YEAR) -> float:
         return 0.0
     mean = sum(rs) / len(rs)
     var = sum((r - mean) ** 2 for r in rs) / (len(rs) - 1)
-    if var <= 0:
+    if var <= 1e-12:
         return 0.0
     return mean / sqrt(var) * sqrt(periods)
 
